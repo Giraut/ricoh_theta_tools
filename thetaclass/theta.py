@@ -114,6 +114,30 @@ class Theta:
 			50:         "50",
 			60:         "60"}
 
+  _iso_sensitivities = (0,
+			50,
+			64,
+			80,
+			100,
+			125,
+			160,
+			200,
+			250,
+			320,
+			400,
+			500,
+			640,
+			800,
+			1000,
+			1250,
+			1600,
+			2000,
+			2500,
+			3200,
+			4000,
+			5000,
+			6400)
+
   _valid_file_formats = (# Type,  Width, Height, Codec, framerate, dualtrack
 
 			# Theta A1 and Theta X image
@@ -1284,6 +1308,49 @@ class Theta:
 
 
 
+  def get_iso_sensitivity(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the current ISO sensitivity value - one of 0, 50, 64, 80, 100, 125,
+    160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200,
+    4000, 5000, 6400
+    """
+
+    return self._get_option("iso",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
+  def set_iso_sensitivity(self,
+				iso,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Set the ISO sensitivity value - one of 0, 50, 64, 80, 100, 125,
+    160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200,
+    4000, 5000, 6400
+    """
+
+    # Sanity-check the arguments
+    assert isinstance(iso, int), \
+		"iso required and should be an int"
+    assert iso in self._iso_sensitivities, \
+		"iso should be {}".\
+			format(" or ".
+				join(", ".join("{}".format(f) \
+					for f in self._iso_sensitivities
+					).rsplit(", ", 1)))
+
+    return self._set_option("iso", iso,
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
   def get_exposure_compensation(self,
 				connect_timeout = _default_connect_timeout,
 				reconnect_tries = _default_reconnect_tries,
@@ -1312,7 +1379,7 @@ class Theta:
 
     # Sanity-check the arguments
     assert type(ev) in (int, float), \
-		"ev required and should be int or a flot"
+		"ev required and should be an int or a flot"
     assert ev in self._allowed_ev_values, \
 		"ev should be {}".\
 			format(" or ".
