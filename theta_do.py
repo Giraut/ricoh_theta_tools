@@ -175,6 +175,11 @@ def main():
 	  help = "Get or set power saving"
 	)
 
+  subparser_gps = subparsers.add_parser(
+	  "gps",
+	  help = "Get or set GPS tag recording"
+	)
+
   subparser_reboot = subparsers.add_parser(
 	  "reboot",
 	  help = "Reboot the camera"
@@ -287,14 +292,14 @@ def main():
 
 	)
 
-  subparser_powersaving.add_argument(
+  subparser_gps.add_argument(
 	  "state",
 	  nargs = "?",
 	  type = str,
 	  choices = ("enabled", "disabled"),
 	  default = None,
-	  help = "Power saving state to set. Get the current power saving "
-			"state if omitted"
+	  help = "GPS tag recording state to set. Get the current GPS tag "
+			"recording state if omitted"
 	)
 
   subparser_ui.add_argument(
@@ -503,7 +508,7 @@ def main():
     # If the command is not "password", it is meant to be executed with the
     # cmaera connected to a wifi AP in client mode: use the credentials from
     # the names and credentials file to authenticate with it
-    # 
+    #
     # If the command is "password", it is meant to be run with the computer
     # connected to the camera in configured in wifi AP mode: set the camera's
     # IP to 192.168.1.1 and no credentials
@@ -544,6 +549,13 @@ def main():
         print("enabled" if rt.get_power_saving() else "disabled")
       else:
         prettyprint(rt.set_power_saving(args.state == "enabled"))
+
+    # Enable or disable GPS tag recording
+    elif args.command == "gps":
+      if args.state is None:
+        print("enabled" if rt.get_gps_tag_recording() else "disabled")
+      else:
+        prettyprint(rt.set_gps_tag_recording(args.state == "enabled"))
 
     # Reboot the camera
     elif args.command == "reboot":

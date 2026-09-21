@@ -752,6 +752,36 @@ class Theta:
 
 
 
+  def get_gps_tag_recording(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the current state of GPS tag recording
+    Returns True if it's enabled, False if not
+    """
+
+    return self._get_option("_gpsTagRecording",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout).lower() == "on"
+
+
+
+  def set_gps_tag_recording(self,
+			enabled,
+			connect_timeout = _default_connect_timeout,
+			reconnect_tries = _default_reconnect_tries,
+			read_timeout = _default_request_timeout):
+    """Enable or disable power saving
+    """
+
+    return self._set_option("_gpsTagRecording", "on" if enabled else "off",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
   def reboot(self,
 		wait_rebooted = _default_max_wait_rebooted,
 		connect_timeout = _default_connect_timeout,
