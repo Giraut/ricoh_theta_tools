@@ -210,6 +210,11 @@ def main():
 	  help = "Get or set the exposure program"
 	)
 
+  subparser_speed = subparsers.add_parser(
+	  "speed",
+	  help = "Get or set the shutter speed"
+	)
+
   subparser_ev = subparsers.add_parser(
 	  "ev",
 	  help = "Get or set the exposure compensation"
@@ -353,6 +358,18 @@ def main():
 	  help = "Exposure program to set for the current capture mode. Get "
 			"the current exposure program for the current capture "
 			"mode if omitted"
+	)
+
+  subparser_speed.add_argument(
+	  "speed",
+	  nargs = "?",
+	  type = str,
+	  choices = [Theta._shutter_speeds[p] \
+			for p in sorted(Theta._shutter_speeds)],
+	  default = None,
+	  help = "Shutter speed to set for the current capture mode. Get "
+			"the current shutter for the current capture mode if "
+			"omitted"
 	)
 
   subparser_ev.add_argument(
@@ -606,6 +623,13 @@ def main():
         print(rt.get_exposure_program())
       else:
         prettyprint(rt.set_exposure_program(args.program))
+
+    # Get or set the shutter speed
+    elif args.command == "speed":
+      if args.speed is None:
+        print(rt.get_shutter_speed())
+      else:
+        prettyprint(rt.set_shutter_speed(args.speed))
 
     # Get or set the exposure compensation value
     elif args.command == "ev":
