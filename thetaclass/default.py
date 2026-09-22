@@ -9,7 +9,7 @@ _default_reconnect_tries = 1
 
 _default_request_timeout = 5 #s
 _default_stop_video_capture_timeout = 10 #s
-_default_file_operations_timeout = 15 #s
+_default_file_operations_timeout = 30 #s
 
 _default_check_photo_taken_every = 1 #s
 _default_max_wait_photo_taken = (60 + 10 + 5) #s
