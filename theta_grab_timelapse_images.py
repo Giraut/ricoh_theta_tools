@@ -230,8 +230,8 @@ def main():
       # Should we do a basic setup of the camera?
       if do_basic_setup:
 
-        log(INFO, "Basic camera setup: power mode = silent")
-        retry(rt, rt.set_power_mode, "silent",
+        log(INFO, "Basic camera setup: UI = locked")
+        retry(rt, rt.lock_ui,
 		reconnect_tries = reconnect_tries)
 
         log(INFO, "Basic camera setup: GPS tag recording = on")
