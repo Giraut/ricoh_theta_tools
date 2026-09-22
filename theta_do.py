@@ -116,10 +116,15 @@ def printable_file_format(filetype, width, height, codec, framerate, dualtrack):
 
 
 def prettyprint(j, file = sys.stdout):
-  """Pretty-print a JSON structure
+  """Pretty-print a JSON structure or a simplified version of it when possible
   """
 
-  print(json.dumps(j, indent = 2), file = file)
+  # If the response is just a name and a state, just display the state
+  # (typically "done"). Otherwise pretty-print the JSON structure in full
+  if set(j.keys()) == {"name", "state"}:
+    print(j["state"])
+  else:
+    print(json.dumps(j, indent = 2), file = file)
 
 
 
@@ -727,7 +732,7 @@ def main():
         rt.download_last_file()
       else:
         rt.download_files(file_urls)
-      print("Done")
+      print("done")
 
     # View a file in the camera or a local file
     elif args.command == "view":
