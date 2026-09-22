@@ -234,8 +234,12 @@ def main():
         retry(rt, rt.lock_ui,
 		reconnect_tries = reconnect_tries)
 
+        log(INFO, "Basic camera setup: shutter volume = 0")
+        retry(rt, rt.set_shutter_volume, 0,
+		reconnect_tries = reconnect_tries)
+
         log(INFO, "Basic camera setup: GPS tag recording = on")
-        retry(rt, rt.set_power_mode, "silent",
+        retry(rt, rt.set_gps_tag_recording, "on",
 		reconnect_tries = reconnect_tries)
 
         log(INFO, "Basic camera setup: capture mode = image")
