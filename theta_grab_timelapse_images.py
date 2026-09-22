@@ -242,6 +242,10 @@ def main():
         retry(rt, rt.set_capture_mode, "image",
 		reconnect_tries = reconnect_tries)
 
+        log(INFO, "Basic camera setup: stitching mode = static")
+        retry(rt, rt.set_capture_mode, "image",
+		reconnect_tries = reconnect_tries)
+
         do_basic_setup = False
         next_shot_tstamp = time()
 
