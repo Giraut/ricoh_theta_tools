@@ -846,6 +846,42 @@ class Theta:
 
 
 
+  def get_shutter_volume(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the current shutter volume
+    0 <= volume <= 100
+    """
+
+    return self._get_option("_shutterVolume",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
+  def set_shutter_volume(self,
+				volume,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Set the shutter volume
+    0 <= volume <= 100
+    """
+
+    assert isinstance(volume, int), \
+		"volume required and should be an int"
+    assert 0 <= volume <= 100, \
+		"volume out of range - should be >= 0 and <= 100"
+
+    return self._set_option("_shutterVolume", volume,
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
   def get_gps_tag_recording(self,
 				connect_timeout = _default_connect_timeout,
 				reconnect_tries = _default_reconnect_tries,

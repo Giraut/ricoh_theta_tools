@@ -180,6 +180,11 @@ def main():
 	  help = "Get or set power saving"
 	)
 
+  subparser_volume = subparsers.add_parser(
+	  "volume",
+	  help = "Get or set the shutter volume"
+	)
+
   subparser_gps = subparsers.add_parser(
 	  "gps",
 	  help = "Get or set GPS tag recording"
@@ -305,6 +310,25 @@ def main():
 	  default = None,
 	  help = "Power mode to set. Get the current power mode if omitted"
 
+	)
+
+  subparser_powersaving.add_argument(
+	  "state",
+	  nargs = "?",
+	  type = str,
+	  choices = ("enabled", "disabled"),
+	  default = None,
+	  help = "Power saving state to set. Get the current power saving "
+			"state if omitted"
+	)
+
+  subparser_volume.add_argument(
+	  "volume",
+	  nargs = "?",
+	  type = int,
+	  default = None,
+	  help = "Shutter volume to set. Get the current shutter volume "
+			"if omitted"
 	)
 
   subparser_gps.add_argument(
@@ -587,6 +611,13 @@ def main():
         print("enabled" if rt.get_power_saving() else "disabled")
       else:
         prettyprint(rt.set_power_saving(args.state == "enabled"))
+
+    # Get or set the shutter volume
+    elif args.command == "volume":
+      if args.volume is None:
+        print(rt.get_shutter_volume())
+      else:
+        prettyprint(rt.set_shutter_volume(args.volume))
 
     # Enable or disable GPS tag recording
     elif args.command == "gps":
