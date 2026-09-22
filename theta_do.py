@@ -185,6 +185,11 @@ def main():
 	  help = "Get or set the shutter volume"
 	)
 
+  subparser_wlanantenna = subparsers.add_parser(
+	  "wlanantenna",
+	  help = "Get or set the WLAN antenna config when connected in AP mode"
+	)
+
   subparser_gps = subparsers.add_parser(
 	  "gps",
 	  help = "Get or set GPS tag recording"
@@ -329,6 +334,16 @@ def main():
 	  default = None,
 	  help = "Shutter volume to set. Get the current shutter volume "
 			"if omitted"
+	)
+
+  subparser_wlanantenna.add_argument(
+	  "config",
+	  nargs = "?",
+	  type = str,
+	  choices = ("siso", "mimo"),
+	  default = None,
+	  help = "WLAN antenna configuration to set. Get the current WLAN "
+			"antenna configuration if omitted"
 	)
 
   subparser_gps.add_argument(
@@ -556,8 +571,8 @@ def main():
 		format(current_theta_camera_name_file))
 
   # Load the Theta cameras' names and credentials file if the command is not
-  # "password"
-  if args.command != "password":
+  # "password" or "wlanantenna"
+  if args.command not in ("password", "wlanantenna"):
     with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
       theta_cameras_credentials = json.load(f)
 
@@ -567,14 +582,14 @@ def main():
 
     # Open the camera
     #
-    # If the command is not "password", it is meant to be executed with the
-    # cmaera connected to a wifi AP in client mode: use the credentials from
-    # the names and credentials file to authenticate with it
+    # If the command is not "password" or "wlanantenna", it is meant to be
+    # executed with the cmaera connected to a wifi AP in client mode: use the
+    # credentials from the names and credentials file to authenticate with it
     #
-    # If the command is "password", it is meant to be run with the computer
-    # connected to the camera in configured in wifi AP mode: set the camera's
-    # IP to 192.168.1.1 and no credentials
-    if args.command != "password":
+    # If the command is "password" or "wlanantenna", it is meant to be executed
+    # with the computer connected to the camera in configured in wifi AP mode:
+    # set the camera's IP to 192.168.1.1 and no credentials
+    if args.command not in ("password", "wlanantenna"):
       rt = Theta(**theta_cameras_credentials[args.camera])
     else:
       rt = Theta(addr = "192.168.1.1", username = None, password = None)
@@ -618,6 +633,13 @@ def main():
         print(rt.get_shutter_volume())
       else:
         prettyprint(rt.set_shutter_volume(args.volume))
+
+    # Get or set the WLAN antenna configuration
+    elif args.command == "wlanantenna":
+      if args.config is None:
+        print(rt.get_wlan_antenna_config())
+      else:
+        prettyprint(rt.set_wlan_antenna_config(args.config))
 
     # Enable or disable GPS tag recording
     elif args.command == "gps":

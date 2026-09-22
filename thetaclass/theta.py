@@ -882,6 +882,41 @@ class Theta:
 
 
 
+  def get_wlan_antenna_config(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the current wlan antenna configuration - SISO or MIMO
+    """
+
+    return self._get_option("_wlanAntennaConfig",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout).lower()
+
+
+
+  def set_wlan_antenna_config(self,
+			config,
+			connect_timeout = _default_connect_timeout,
+			reconnect_tries = _default_reconnect_tries,
+			read_timeout = _default_request_timeout):
+    """Set the wlan antenna configuration to SISO or MIMO
+
+    This setting may only be set when connected to the camera in AP mode - aka
+    "direct mode" - and only takes effect after a reboot.
+    """
+
+    assert config in ("siso", "mimo"), \
+		'setting required and should be "siso" or "mimo"'
+
+    return self._set_option("_wlanAntennaConfig", config.upper(),
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
   def get_gps_tag_recording(self,
 				connect_timeout = _default_connect_timeout,
 				reconnect_tries = _default_reconnect_tries,
