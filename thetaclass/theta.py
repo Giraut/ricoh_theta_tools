@@ -138,6 +138,26 @@ class Theta:
 			5000,
 			6400)
 
+  _valid_live_preview_formats = (# Width, Height, framerate
+
+				# Theta X, V and Z1
+				(1024, 512, 30),
+
+				# Theta X
+				(3840, 1920, 30),
+				(1920, 960, 30),
+				(1024, 512, 15),
+				(512, 512, 30),
+
+				# Theta V and Z1
+				(1920, 960, 8),
+				(1024, 512, 8),
+				(640, 320, 30),
+				(640, 320, 8),
+
+				# Theta S and SC
+				(640, 320, 10))
+
   _valid_file_formats = (# Type,  Width, Height, Codec, framerate, dualtrack
 
 			# Theta A1 and Theta X image
@@ -557,7 +577,7 @@ class Theta:
       self.cmd_id = int(self.cmd_id)
 
     return json_resp
-				
+
 
 
   def get_command_status(self,
@@ -630,7 +650,7 @@ class Theta:
 					for name in option_names))
 
     return json_resp_results_options
-				
+
 
 
   def _get_option(self,
@@ -649,7 +669,7 @@ class Theta:
 				connect_timeout = connect_timeout,
 				reconnect_tries = reconnect_tries,
 				read_timeout = read_timeout)[option_name]
-				
+
 
 
   def _set_options(self,
@@ -672,7 +692,7 @@ class Theta:
 				connect_timeout = connect_timeout,
 				reconnect_tries = reconnect_tries,
 				read_timeout = read_timeout)
-				
+
 
 
   def _set_option(self,
@@ -692,7 +712,7 @@ class Theta:
 				connect_timeout = connect_timeout,
 				reconnect_tries = reconnect_tries,
 				read_timeout = read_timeout)
-				
+
 
 
   def set_client_mode_password(self,
@@ -1073,6 +1093,36 @@ class Theta:
 		"malformed JSON response: missing width"
     assert "height" in json_resp, \
 		"malformed JSON response: missing height"
+
+    return json_resp
+
+
+
+  def set_live_preview_format(self,
+				width,
+				height,
+				framerate,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Set the live preview MJPEG stream format
+    """
+
+    assert isinstance(width, int), \
+		"width required and should be an int"
+    assert isinstance(height, int), \
+		"height required and should be an int"
+    assert framerate is None or isinstance(framerate, int), \
+		"framerate should be an int or None"
+    assert (width, height, framerate) in self._valid_live_preview_formats, \
+		"invalid preview format"
+
+    previewformat = {"width": width, "height": height, "framerate": framerate}
+
+    json_resp = self._set_option("previewFormat", previewformat,
+					connect_timeout = connect_timeout,
+					reconnect_tries = reconnect_tries,
+					read_timeout = read_timeout)
 
     return json_resp
 

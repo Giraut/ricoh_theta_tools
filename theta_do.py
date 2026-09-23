@@ -96,6 +96,16 @@ def theta_camera_names_completer(**kwargs):
 
 
 
+def printable_live_preview_format(width, height, framerate):
+  """Return a short description string of a live preview format
+  """
+
+  desc = "{}x{} @ {} fps".format(width, height, framerate)
+
+  return desc
+
+
+
 def printable_file_format(filetype, width, height, codec, framerate, dualtrack):
   """Return a short description string of a file format
   """
@@ -205,8 +215,13 @@ def main():
 	  help = "Lock or unlock the UI"
 	)
 
+  subparser_live_preview_format = subparsers.add_parser(
+	  "previewformat",
+	  help = "Get or set the live preview MJPEG stream format"
+	)
+
   subparser_live_preview = subparsers.add_parser(
-	  "livepreview",
+	  "preview",
 	  help = "View the live preview MJPEG stream"
 	)
 
@@ -363,6 +378,19 @@ def main():
 	  help = "UI locking state to set"
 	)
 
+  subparser_live_preview_format.add_argument(
+	  "format",
+	  nargs = "?",
+	  choices = ["list"] + \
+			["{}".format(i + 1) for i in \
+				range(len(Theta._valid_live_preview_formats))],
+          type = str,
+	  default = None,
+	  help = 'Number of the pedefined live preview format to set or "list" '
+			'to list all the formats. Get the current live preview '
+			'format if omitted'
+	)
+
   subparser_live_preview.add_argument(
 	  "viewer_command",
 	  nargs = "?",
@@ -374,15 +402,15 @@ def main():
 	)
 
   subparser_file_format.add_argument(
-	  "fileformat",
+	  "format",
 	  nargs = "?",
 	  choices = ["list"] + \
-			["{}".format(i + 1) \
-				for i in range(len(Theta._valid_file_formats))],
+			["{}".format(i + 1) for i in \
+				range(len(Theta._valid_file_formats))],
           type = str,
 	  default = None,
 	  help = 'Number of the pedefined file format to set for the current '
-			'capture mode, or "list" to list all the format. Get '
+			'capture mode, or "list" to list all the formats. Get '
 			'the current file format for the current capture mode '
 			'if omitted'
 	)
@@ -656,14 +684,38 @@ def main():
     elif args.command == "ui":
         prettyprint((rt.lock_ui if args.state == "locked" else rt.unlock_ui)())
 
+    # Get or set the live preview format
+    elif args.command == "previewformat":
+
+        if args.format is None:
+
+          r = rt.get_live_preview_format()
+          f = (r["width"], r["height"], r["framerate"])
+
+          if f in Theta._valid_live_preview_formats:
+            i = Theta._valid_live_preview_formats.index(f) + 1
+            print("#{}: {}".format(i, printable_live_preview_format(*f)))
+
+          else:
+            print("Unknown file format: {}".
+			format(printable_live_preview_format(*f)))
+
+        elif args.format == "list":
+          for i, f  in enumerate(Theta._valid_live_preview_formats):
+            print("#{}: {}".format(i + 1, printable_live_preview_format(*f)))
+
+        else:
+          f = Theta._valid_live_preview_formats[int(args.format) - 1]
+          prettyprint(rt.set_live_preview_format(*f))
+
     # Play the live preview
-    elif args.command == "livepreview":
+    elif args.command == "preview":
         rt.live_preview(viewer_cmd = args.viewer_command)
 
     # Get or set the file format
     elif args.command == "fileformat":
 
-        if args.fileformat is None:
+        if args.format is None:
 
           r = rt.get_file_format()
           f = (r["filetype"], r["width"], r["height"],
@@ -676,12 +728,12 @@ def main():
           else:
             print("Unknown file format: {}".format(printable_file_format(*f)))
 
-        elif args.fileformat == "list":
+        elif args.format == "list":
           for i, f  in enumerate(Theta._valid_file_formats):
             print("#{}: {}".format(i + 1, printable_file_format(*f)))
 
         else:
-          f = Theta._valid_file_formats[int(args.fileformat) - 1]
+          f = Theta._valid_file_formats[int(args.format) - 1]
           prettyprint(rt.set_file_format(*f))
 
     # Get or set the filter
