@@ -171,9 +171,18 @@ def retry(rt, fct, *args, **kwargs):
       return fct(*args, **kwargs)
 
     except Exception as e:
+
+      e = str(e)
       log(ERROR, e)
+
+      # If we get an error 403, something has gone seriously wrong with the
+      # camera, so stop retrying to let the main loop reboot the camera
+      # immediately
+      if e.startswith("403 Client Error: Forbidden"):
+        raise RuntimeError("THETA:{}".format(e))
+
       if t > retries:
-        raise
+        raise RuntimeError("THETA:{}".format(e))
 
       log(INFO, "Retry...")
       sys.stdout.flush()
@@ -419,9 +428,11 @@ def main():
       # Schedule the next shot
       next_shot_tstamp += grab_image_every
 
-    except Exception as e:
+    except RuntimeError as e:
 
-      log(ERROR, e)
+      if not str(e).startswith("THETA"):
+        raise
+
       do_reboot = True
 
 
