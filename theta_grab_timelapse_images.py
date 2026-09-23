@@ -10,7 +10,9 @@ import json
 import argparse
 from thetaclass.theta import Theta
 from time import time, sleep
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+from timezonefinder import TimezoneFinder
 from astral import Observer, Depression
 from astral.sun import dawn, dusk, elevation
 
@@ -48,6 +50,25 @@ twilight_depression = Depression.NAUTICAL.value # sun ~12 deg below the horizon
 # }
 theta_cameras_credentials_file = "~/.ricoh_theta_creds.json"
 
+# Theta cameras' location file (optional)
+#
+# The file must have the following format
+#
+# {
+#   "name1": {
+#     "latitude": 12.34567,
+#     "longitude": 12.34567,
+#     "altitude": 12.3
+#   },
+#   "name2": {
+#     "latitude": 12.34567,
+#     "longitude": 12.34567,
+#     "altitude": 12.3
+#   },
+#   ...
+# }
+theta_cameras_locations_file = "~/.ricoh_theta_location.json"
+
 
 
 ## Defines
@@ -58,6 +79,24 @@ ERROR = 2
 
 
 ### Routines
+def configure_camera_after_start(rt):
+  """Configure the camera before starting the capture or after rebooting it
+  """
+
+  log(INFO, "Basic camera setup: UI = locked")
+  retry(rt, rt.lock_ui, reconnect_tries = reconnect_tries)
+
+  log(INFO, "Basic camera setup: shutter volume = 0")
+  retry(rt, rt.set_shutter_volume, 0, reconnect_tries = reconnect_tries)
+
+  log(INFO, "Basic camera setup: capture mode = image")
+  retry(rt, rt.set_capture_mode, "image", reconnect_tries = reconnect_tries)
+
+  log(INFO, "Basic camera setup: stitching mode = static")
+  retry(rt, rt.set_capture_mode, "image", reconnect_tries = reconnect_tries)
+
+
+
 def configure_camera_for_daytime_capture(rt):
   """Configure the camera to take daytime pictures
   """
@@ -162,7 +201,7 @@ def log(loglevel, *args, prefix = True, linefeed = True, file = sys.stdout):
   setattr(log, "__last_linefeed", linefeed)
 
   file.flush()
-    
+
 
 
 ### Main routine
@@ -195,6 +234,32 @@ def main():
   with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
     theta_cameras_credentials = json.load(f)
 
+  # Try to load the Theta cameras' location file and figure out the location's
+  # timezone. If the it doesn't exist, just log a warning
+  fp = os.path.expanduser(theta_cameras_locations_file)
+  if os.path.exists(os.path.expanduser(fp)):
+
+    with open(fp, "r") as f:
+      theta_cameras_locations = json.load(f)
+
+    location = theta_cameras_locations[args.camera]
+
+    latitude = location["latitude"]
+    longitude = location["longitude"]
+    altitude = location["altitude"]
+
+    observer = Observer(latitude = latitude,
+			longitude = longitude,
+			elevation = altitude)
+
+    timezone_name = TimezoneFinder().timezone_at(lat = latitude,
+							lng = longitude)
+    timezone = ZoneInfo(timezone_name)
+
+  else:
+    location = None
+    log(WARN, "No camera locations file found: no auto day/night config")
+
   assert args.camera in theta_cameras_credentials
 
   # Open the camera
@@ -206,11 +271,6 @@ def main():
   do_basic_setup = True
   camera_set_for_daytime = None
   do_reboot = False
-
-  # Regex to match the GPS date/time/timezone returned in the camera's state
-  gps_datetimezone_regex = re.compile(r"^([0-9]{4}):([0-9]{2}):([0-9]{2})\s" \
-					r"([0-9]{2}):([0-9]{2}):([0-9]{2})" \
-					"([+-][0-9]{1,2}:[0-9]{2})$")
 
   # Grab images forever
   while True:
@@ -230,25 +290,7 @@ def main():
       # Should we do a basic setup of the camera?
       if do_basic_setup:
 
-        log(INFO, "Basic camera setup: UI = locked")
-        retry(rt, rt.lock_ui,
-		reconnect_tries = reconnect_tries)
-
-        log(INFO, "Basic camera setup: shutter volume = 0")
-        retry(rt, rt.set_shutter_volume, 0,
-		reconnect_tries = reconnect_tries)
-
-        log(INFO, "Basic camera setup: GPS tag recording = on")
-        retry(rt, rt.set_gps_tag_recording, "on",
-		reconnect_tries = reconnect_tries)
-
-        log(INFO, "Basic camera setup: capture mode = image")
-        retry(rt, rt.set_capture_mode, "image",
-		reconnect_tries = reconnect_tries)
-
-        log(INFO, "Basic camera setup: stitching mode = static")
-        retry(rt, rt.set_capture_mode, "image",
-		reconnect_tries = reconnect_tries)
+        configure_camera_after_start(rt)
 
         do_basic_setup = False
         next_shot_tstamp = time()
@@ -271,11 +313,7 @@ def main():
           log(WARN, "Capping the lateness to {:0.1f} s".
 			format(grab_image_every))
 
-      # We don't know whether it's daytime or nighttime yet without GPS data
-      is_daytime = None
-
-      # Get the battery's SoC, temperature, PCB temperature, GPS information
-      # and camera errors
+      # Get the battery's SoC, temperature, PCB temperature and camera errors
       state = retry(rt, rt.get_state, reconnect_tries = reconnect_tries)
 
       batt_percent = state["batteryLevel"] * 100
@@ -283,53 +321,33 @@ def main():
       batt_temp = state["_batteryTemp"]
       pcb_temp = state["_boardTemp"]
 
-      try:
-
-        gps_info = state["_internalGpsInfo"]["gpsInfo"]
-        latitude = gps_info["lat"]
-        longitude = gps_info["lng"]
-        altitude = gps_info["_altitude"]
-        datetimezone = gps_info["_dateTimeZone"]
-        m = gps_datetimezone_regex.match(datetimezone)
-        assert m
-        now = datetime.fromisoformat(
-				"{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{}".\
-					format(int(m[1]), int(m[2]), int(m[3]),
-						int(m[4]), int(m[5]), int(m[6]),
-						m[7]))
-
-      except:
-        gps_info = None
-
       errors = state["_cameraError"]
 
       if errors:
         errors = ",".join(errors)
       else:
         errors = "/"
-        
+
       log(INFO, "Batt {:0.0f}% ({}), {:0.1f}C - PCB {:0.1f}C - Errors: {}".
 			format(batt_percent, batt_state, batt_temp, pcb_temp,
 				errors))
 
-      # If we have GPS data, try to calculate the nautical dawn and dusk times
-      # for today and tomorrow - which may fail in high latitudes when the sun
-      # never rises or never sets
-      if gps_info:
+      # Do we have location data?
+      if location:
 
-        observer = Observer(latitude=latitude,
-				longitude=longitude,
-				elevation = altitude)
-
-        tomorrow = now + timedelta(days = 1)
+        # Get the time at the camera's location
+        now = datetime.now(timezone)
 
         # try to calculate the nautical dawn and dusk times for today and
         # tomorrow - which may fail in high latitudes when the sun never rises
         # or never sets
         try:
+
+          tomorrow = now + timedelta(days = 1)
+
           today_dawn_time = dawn(observer,
 					date = now.date(),
-          depression = twilight_depression,
+					depression = twilight_depression,
 					tzinfo = now.tzinfo)
 
           today_dusk_time = dusk(observer,
@@ -356,19 +374,20 @@ def main():
             is_daytime = False
             next_dawn_dusk_time = tomorrow_dawn_time
 
-          log(INFO, "GPS time {:%Y-%m-%d %H:%M:%S} ({}time)".
+          log(INFO, "Camera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
 			format(now,
 				"day" if is_daytime else "night"))
           log(INFO, "Next {}: {:%Y-%m-%d %H:%M:%S}".
 			format("dusk" if is_daytime else "dawn",
 				next_dawn_dusk_time))
 
-        # Calculating dusk and dawn times failed: determine whether it's
+        # If calculating dusk and dawn times failed: determine whether it's
         # daytime or nighttime by checking the elevation of the sun
         except:
+
           is_daytime = elevation(observer, now) >= twilight_depression
 
-          log(INFO, "GPS time {:%Y-%m-%d %H:%M:%S} ({}time)".
+          log(INFO, "Cmaera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
 			format(now,
 				"day" if is_daytime else "night",
 				"dusk" if is_daytime else "dawn"))
@@ -388,6 +407,7 @@ def main():
       # Take a shot
       log(INFO, "Taking a photo")
       r  = retry(rt, rt.take_photo, reconnect_tries = reconnect_tries)
+
       file_url = r["results"]["fileUrl"]
       log(INFO, file_url)
 
