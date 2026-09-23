@@ -578,25 +578,47 @@ def main():
 
   args = argparser.parse_args()
 
-  # If the camera name was not supplied, try to read it off of the save file
-  if args.camera is None:
-    try:
-      with open(current_theta_camera_name_file, "r") as f:
-        args.camera = json.load(f)["name"]
-    except:
-      print("[ERROR] Cannot get camera name from {}. Supply it with "
-		"-c / --camera".
-		format(current_theta_camera_name_file))
-      return -1
+  # Try to read the name of the previously-used camera in the save file
+  try:
+    with open(current_theta_camera_name_file, "r") as f:
+      prev_camera_name = json.load(f)["name"]
+    assert isinstance(prev_camera_name, str) and prev_camera_name
+  except:
+    prev_camera_name = None
 
-  # The camera name was supplied: save it
-  else:
+  # If no camera name was supplied, use the previous name instead
+  if not args.camera:
+    args.camera = prev_camera_name
+
+  # If we don't have a camera name, throw an error
+  if not args.camera:
+    print("[ERROR] Cannot get camera name from {}. Supply it with "
+		"-c / --camera".format(current_theta_camera_name_file))
+    return -1
+
+  # Load the Theta cameras' names and credentials file if the command is not
+  # "password" or "wlanantenna"
+  if args.command not in ("password", "wlanantenna"):
+    with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
+      theta_cameras_credentials = json.load(f)
+
+  if args.camera not in theta_cameras_credentials:
+    print('[ERROR] Unknown camera "{}"'.format(args.camera))
+    return -1
+
+  # If the name is different from the one in the save file, or there was no
+  # existing file, or it was empty, update the file
+  if prev_camera_name is None or prev_camera_name != args.camera:
     try:
       with open(current_theta_camera_name_file, "w") as f:
         print(json.dumps({"name": args.camera}, indent = 2), file = f)
     except:
       print("[WARNING] Cannot save camera name in {}".
 		format(current_theta_camera_name_file))
+
+  # No camera name supplied
+  else:
+    args.camera = prev_camera_name
 
   # Load the Theta cameras' names and credentials file if the command is not
   # "password" or "wlanantenna"
