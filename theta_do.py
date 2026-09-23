@@ -129,12 +129,20 @@ def prettyprint(j, file = sys.stdout):
   """Pretty-print a JSON structure or a simplified version of it when possible
   """
 
-  # If the response is just a name and a state, just display the state
-  # (typically "done"). Otherwise pretty-print the JSON structure in full
-  if set(j.keys()) == {"name", "state"}:
-    print(j["state"])
+  if isinstance(j, dict):
+
+    # If the response is just a name and a state, just display the state
+    # (typically "done")
+    if set(j.keys()) == {"name", "state"}:
+      print(j["state"], file = file)
+
+    # Otherwise pretty-print the JSON structure in full
+    else:
+      print(json.dumps(j, indent = 2), file = file)
+
+  # Not JSON: just print it normally as a fallback
   else:
-    print(json.dumps(j, indent = 2), file = file)
+    print(j, file = file)
 
 
 
@@ -668,7 +676,11 @@ def main():
       if args.mode is None:
         print(rt.get_power_mode())
       else:
-        prettyprint(rt.set_power_mode(args.mode))
+        if args.mode in ("sleep", "off"):
+          rt.set_power_mode(args.mode)
+          print("done")
+        else:
+          prettyprint(rt.set_power_mode(args.mode))
 
     # Enable or disable power saving
     elif args.command == "powersaving":
