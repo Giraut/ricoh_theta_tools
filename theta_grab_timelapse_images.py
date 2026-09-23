@@ -11,8 +11,13 @@ import argparse
 from thetaclass.theta import Theta
 from time import time, sleep
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 from timezonefinder import TimezoneFinder
+
+try:
+  from zoneinfo import ZoneInfo
+except ImportError:
+  from backports.zoneinfo import ZoneInfo
+
 from astral import Observer, Depression
 from astral.sun import dawn, dusk, elevation
 
