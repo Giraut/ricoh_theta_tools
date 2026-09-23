@@ -5,3 +5,12 @@ Version 1.1.0 - 22/09/2026 - Added support for GPS tag recording, shutter speed,
                              camera for day or night capture at dawn or dusk
                              automatically based on GPS data
                            - Various minor improvements
+Version 1.2.0 - 23/09/2026 - Added support for WLAN antenna configuration,
+                             shutter volume, and live preview format setting
+                           - theta_grab_timelapse_images.py now uses location
+                             data from configuration file rather than from the
+                             camera's GPS, in case GPS reception is flaky
+                           - theta_grab_timelapse_images.py now configures the
+                             camera for static switching, to avoid deforming
+                             star trails along the stitc line
+                           - Various bugfixes
