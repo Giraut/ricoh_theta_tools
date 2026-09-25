@@ -1,5 +1,5 @@
 # Ricoh Theta tools
-### Version 1.0.0
+### Version 1.2.0
 
 Linux client and Python class to remote-control a Ricoh Theta camera from the command line
 
