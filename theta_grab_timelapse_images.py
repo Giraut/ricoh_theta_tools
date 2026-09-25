@@ -295,7 +295,11 @@ def main():
       if do_reboot:
 
         log(WARN, "Rebooting the camera")
-        rt.reboot()
+        try:
+          rt.reboot()
+        except Exception as e:
+          log(ERROR, e)
+          continue
 
         do_reboot = False
         do_basic_setup = True
