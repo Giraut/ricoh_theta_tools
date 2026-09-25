@@ -30,6 +30,7 @@ except:
 
 ### Parameters
 grab_image_every = 30 #s
+ping_camera_every = 5 #s - keep the connection alive to prevent disconnections
 retries = 20
 wait_before_retry = 2 #s
 reconnect_tries = 5
@@ -314,12 +315,27 @@ def main():
         next_shot_tstamp = time()
 
       # Wait until the next shot, if needed
+      # Ping the camera while we wait, to keep the connection alive
       wait_for = next_shot_tstamp - time()
       late_by = -wait_for
+      ping = False
 
       if wait_for > 0:
         log(INFO, "Waiting {:0.1f} s until next the shot".format(wait_for))
-        sleep(wait_for)
+
+        while wait_for > 0:
+
+          if ping:
+            if wait_for > 2:
+              log(INFO, "Pinging the camera to keep the connection alive")
+              retry(rt, rt.check_for_updates, reconnect_tries = reconnect_tries)
+            ping = False
+
+          else:
+            sleep(min(wait_for, ping_camera_every))
+            ping = True
+
+          wait_for = next_shot_tstamp - time()
 
       elif late_by > 0.5:
         log(INFO, "Not waiting for the next shot as it is already "
