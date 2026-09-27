@@ -947,10 +947,13 @@ def main():
           os.system(args.video_player_command.format(args.file))
 
   except Exception as e:
+
     print("[ERROR]", end = "")
     e = "{}".format(e)
     if e:
       print(" " + e[0].upper() + e[1:])
+
+    return -1
 
   return 0
 
