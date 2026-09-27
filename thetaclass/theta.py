@@ -866,6 +866,36 @@ class Theta:
 
 
 
+  def get_bluetooth_state(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the current state of bluetooth
+    Returns True if it's enabled, False if not
+    """
+
+    return self._get_option("_bluetoothPower",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout).lower() == "on"
+
+
+
+  def set_bluetooth_state(self,
+			enabled,
+			connect_timeout = _default_connect_timeout,
+			reconnect_tries = _default_reconnect_tries,
+			read_timeout = _default_request_timeout):
+    """Enable or disable bluetooth
+    """
+
+    return self._set_option("_bluetoothPower", "ON" if enabled else "OFF",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
   def get_shutter_volume(self,
 				connect_timeout = _default_connect_timeout,
 				reconnect_tries = _default_reconnect_tries,

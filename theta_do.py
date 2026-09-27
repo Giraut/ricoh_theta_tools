@@ -195,7 +195,12 @@ def main():
 
   subparser_powersaving = subparsers.add_parser(
 	  "powersaving",
-	  help = "Get or set power saving"
+	  help = "Enable ot disable power saving"
+	)
+
+  subparser_bluetooth = subparsers.add_parser(
+	  "bluetooth",
+	  help = "Enable or disable power saving"
 	)
 
   subparser_volume = subparsers.add_parser(
@@ -346,8 +351,18 @@ def main():
 	  type = str,
 	  choices = ("enabled", "disabled"),
 	  default = None,
-	  help = "Power saving state to set. Get the current power saving "
-			"state if omitted"
+	  help = "Enable or disable power saving. Get the current state of "
+			"power saving if omitted"
+	)
+
+  subparser_bluetooth.add_argument(
+	  "state",
+	  nargs = "?",
+	  type = str,
+	  choices = ("enabled", "disabled"),
+	  default = None,
+	  help = "Enable or disable bluetooth. Get the current state of "
+			"bluetooth if omitted"
 	)
 
   subparser_volume.add_argument(
@@ -688,6 +703,13 @@ def main():
         print("enabled" if rt.get_power_saving() else "disabled")
       else:
         prettyprint(rt.set_power_saving(args.state == "enabled"))
+
+    # Enable or disable bluetooth
+    elif args.command == "bluetooth":
+      if args.state is None:
+        print("enabled" if rt.get_bluetooth_state() else "disabled")
+      else:
+        prettyprint(rt.set_bluetooth_state(args.state == "enabled"))
 
     # Get or set the shutter volume
     elif args.command == "volume":
