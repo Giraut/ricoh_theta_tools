@@ -419,7 +419,7 @@ def main():
         # daytime or nighttime by checking the elevation of the sun
         except:
 
-          is_daytime = elevation(observer, now) >= twilight_depression
+          is_daytime = elevation(observer, now) >= -twilight_depression
 
           log(INFO, "Cmaera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
 			format(now,
