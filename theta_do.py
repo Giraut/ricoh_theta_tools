@@ -125,6 +125,22 @@ def printable_file_format(filetype, width, height, codec, framerate, dualtrack):
 
 
 
+def datetimetz_to_iso(datetime_tz):
+  """Convert a nonstandard Theta-style date/time+timezone to ISO 8601
+  """
+
+  m = re.match(Theta._datetime_tz_pattern, datetime_tz)
+
+  if not m:
+    return None
+
+  return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{}".\
+		format(int(m[1]), int(m[2]), int(m[3]),
+			int(m[4]), int(m[5]), int(m[6]),
+			m[7])
+
+
+
 def prettyprint(j, file = sys.stdout):
   """Pretty-print a JSON structure or a simplified version of it when possible
   """
@@ -866,7 +882,8 @@ def main():
     # List files
     elif args.command == "list":
       r = rt.get_file_list(filetype = args.filetype)
-      d = {e["fileUrl"]: (e["size"], e["dateTimeZone"]) for e in r}
+      d = {e["fileUrl"]: (e["size"], datetimetz_to_iso(e["dateTimeZone"])) \
+		for e in r}
       for k in sorted(d):
         print("{:>12}\t{}\t{}".format(d[k][0], d[k][1], k))
 
