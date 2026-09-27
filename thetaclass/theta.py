@@ -37,6 +37,13 @@ class Theta:
 			r"([0-9]{3}RICOH/)" \
 			r"(R[0-9]{7}\.(?:JPG|MP4))$"
 
+  _datetime_pattern = r"^([0-9]{4}):([0-9]{2}):([0-9]{2})\s" \
+				r"([0-9]{2}):([0-9]{2}):([0-9]{2})$"
+
+  _datetime_tz_pattern = r"^([0-9]{4}):([0-9]{2}):([0-9]{2})\s" \
+				r"([0-9]{2}):([0-9]{2}):([0-9]{2})" \
+				"([+-][0-9]{1,2}:[0-9]{2})$"
+
   _allowed_ev_values = (-4.0, -3.7, -3.3, -3.0, -2.7, -2.3,
 			-2.0, -1.7, -1.3, -0.7, -0.3, 0.0,
 			+0.3, +0.7, +1.0, +1.3, +1.7, +2.0,
@@ -283,6 +290,12 @@ class Theta:
 
     # File URL pattern regex
     self.__file_url_regex = re.compile(self._file_url_pattern)
+
+    # Date/time pattern regex
+    self.__datetime_regex = re.compile(self._datetime_pattern)
+
+    # Date/time+timezone pattern regex
+    self.__datetime_tz_regex = re.compile(self._datetime_tz_pattern)
 
     # Exposure program numbers by name
     self.__exposure_program_names = {v: k for k, v in \
@@ -2111,9 +2124,6 @@ class Theta:
       # Is the file an image?
       if file_url.endswith(".JPG"):
 
-        datetime_regex = re.compile(r"^([0-9]{4}):([0-9]{2}):([0-9]{2})\s" \
-					r"([0-9]{2}):([0-9]{2}):([0-9]{2})$")
-
         # Read the image's EXIF tags we need
         with exiftool.ExifToolHelper() as et:
           metadata = et.get_tags(fpath, tags = ["EXIF:DateTimeOriginal",
@@ -2124,17 +2134,13 @@ class Theta:
         exif_tz_offset = metadata.get("EXIF:OffsetTimeOriginal")
 
         # Generate the date / time + timezone offset in ISO format
-        m = datetime_regex.match(exif_datetime)
+        m = self.__datetime_regex.match(exif_datetime)
         exif_datetime_iso = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{}".\
 				format(int(m[1]), int(m[2]), int(m[3]),
 					int(m[4]), int(m[5]), int(m[6]),
 					exif_tz_offset)
 
       elif file_url.endswith(".MP4"):
-
-        datetime_tz_regex = re.compile(r"^([0-9]{4}):([0-9]{2}):([0-9]{2})\s" \
-					r"([0-9]{2}):([0-9]{2}):([0-9]{2})" \
-					"([+-][0-9]{1,2}:[0-9]{2})$")
 
         # Read the image's EXIF tags we need
         with exiftool.ExifToolHelper() as et:
@@ -2144,7 +2150,7 @@ class Theta:
         exif_datetime_tz = metadata.get("QuickTime:ContentCreateDate")
 
         # Generate the date / time + timezone offset in ISO format
-        m = datetime_tz_regex.match(exif_datetime_tz)
+        m = self.__datetime_tz_regex.match(exif_datetime_tz)
         exif_datetime_iso = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{}".\
 				format(int(m[1]), int(m[2]), int(m[3]),
 					int(m[4]), int(m[5]), int(m[6]),
