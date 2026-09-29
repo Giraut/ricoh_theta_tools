@@ -29,8 +29,8 @@ except:
 
 
 ### Parameters
-grab_image_every = 30 #s
-ping_camera_every = 5 #s - keep the connection alive to prevent disconnections
+take_photo_every = 30 #s
+check_camera_state_every = 300 #s
 retries = 20
 wait_before_retry = 2 #s
 reconnect_tries = 5
@@ -82,58 +82,73 @@ INFO = 0
 WARN = 1
 ERROR = 2
 
+POSTPONED = 90000000000
+NEVER = POSTPONED
+
 
 
 ### Routines
 def configure_camera_after_start(rt):
   """Configure the camera before starting the capture or after rebooting it
+  Return the number of tries
   """
 
   log(INFO, "Basic camera setup: UI = locked")
-  retry(rt, rt.lock_ui, reconnect_tries = reconnect_tries)
-
   log(INFO, "Basic camera setup: shutter volume = 0")
-  retry(rt, rt.set_shutter_volume, 0, reconnect_tries = reconnect_tries)
-
   log(INFO, "Basic camera setup: capture mode = image")
-  retry(rt, rt.set_capture_mode, "image", reconnect_tries = reconnect_tries)
-
   log(INFO, "Basic camera setup: stitching mode = static")
-  retry(rt, rt.set_capture_mode, "image", reconnect_tries = reconnect_tries)
+
+  options = {"_cameraControlSource": "app",
+		"_shutterVolume": 0,
+		"captureMode": "image",
+		"_imageStitching": "static"}
+
+  _, tries = retry(rt, rt._set_options, options,
+			reconnect_tries = reconnect_tries)
+
+  return tries
 
 
 
 def configure_camera_for_daytime_capture(rt):
   """Configure the camera to take daytime pictures
+  Return the number of tries
   """
 
   log(INFO, "Daytime camera setup: exposure program = auto")
-  retry(rt, rt.set_exposure_program, "auto", reconnect_tries = reconnect_tries)
-
   log(INFO, "Daytime camera setup: filter = hdr")
-  retry(rt, rt.set_filter, "hdr", reconnect_tries = reconnect_tries)
-
   log(INFO, "Daytime camera setup: EV compensation = 0")
-  retry(rt, rt.set_exposure_compensation, 0, reconnect_tries = reconnect_tries)
+
+  options = {"exposureProgram": 2,
+		"_filter": "off",
+		"exposureCompensation": 0}
+
+  _, tries = retry(rt, rt._set_options, options,
+			reconnect_tries = reconnect_tries)
+
+  return tries
 
 
 
 def configure_camera_for_nighttime_capture(rt):
   """Configure the camera to take daytime pictures
+  Return the number of tries
   """
 
   log(INFO, "Nighttime camera setup: exposure program = manual")
-  retry(rt, rt.set_exposure_program, "manual",
-					reconnect_tries = reconnect_tries)
-
   log(INFO, "Nighttime camera setup: shutter_speed = 10s")
-  retry(rt, rt.set_shutter_speed, 10, reconnect_tries = reconnect_tries)
-
   log(INFO, "Nighttime camera setup: ISO sensitivity = 800")
-  retry(rt, rt.set_iso_sensitivity, 800, reconnect_tries = reconnect_tries)
-
   log(INFO, "Nighttime camera setup: EV compensation = 0")
-  retry(rt, rt.set_exposure_compensation, 0, reconnect_tries = reconnect_tries)
+
+  options = {"exposureProgram": 1,
+		"shutterSpeed": 10,
+		"iso": 800,
+		"exposureCompensation": 0}
+
+  _, tries = retry(rt, rt._set_options, options,
+			reconnect_tries = reconnect_tries)
+
+  return tries
 
 
 
@@ -157,6 +172,7 @@ def theta_camera_names_completer(**kwargs):
 
 def retry(rt, fct, *args, **kwargs):
   """Retry a function call a number of times before failing
+  Return the result of the call and the number of tries
   """
 
   t = 0
@@ -169,7 +185,7 @@ def retry(rt, fct, *args, **kwargs):
       rt.close()
 
       # Retry the function call
-      return fct(*args, **kwargs)
+      return (fct(*args, **kwargs), t)
 
     except Exception as e:
 
@@ -236,6 +252,15 @@ def main():
 	  type = str
 	).completer = theta_camera_names_completer
 
+  argparser.add_argument(
+	  "-i", "--intervalometer",
+	  help = "Don't take the photos if the shots are triggered with an "
+			"an external intervalometer, but still monitor the "
+			"state of the camera, and automatically reconfigure "
+			"it for daytime and nighttime capture at dawn and dusk",
+	  action = "store_true"
+	)
+
   # Expand the tilde in configuration files
   theta_cameras_credentials_file = \
 			os.path.expanduser(theta_cameras_credentials_file)
@@ -267,9 +292,9 @@ def main():
 			longitude = longitude,
 			elevation = altitude)
 
-    timezone_name = TimezoneFinder().timezone_at(lat = latitude,
+    timezone_cam_name = TimezoneFinder().timezone_at(lat = latitude,
 							lng = longitude)
-    timezone = ZoneInfo(timezone_name)
+    timezone_cam = ZoneInfo(timezone_cam_name)
 
   else:
     location = None
@@ -283,177 +308,267 @@ def main():
   # Assume the camera needs setting up when starting, and we don't know whether
   # capture parameters are set for daytime or nighttime, but it doesn't need
   # rebooting at this point
-  do_basic_setup = True
-  camera_set_for_daytime = None
-  do_reboot = False
+  next_reboot_tstamp = NEVER
+  next_basic_setup_tstamp = time()
+  next_day_night_setup_tstamp = NEVER
+  next_state_check_tstamp = NEVER
+  next_photo_tstamp = NEVER
 
-  # Grab images forever
+  tries = 0
+
   while True:
 
     try:
 
+      now = time()
+
+      # If the last command took more than one try to go through, redo the basic
+      # setup of the camera because it has probably lost its marbles
+      if tries > 1:
+        next_basic_setup_tstamp = time()
+
+      # Cap the lateness of any scheduled repeating event if we're running late
+      if now - next_state_check_tstamp > check_camera_state_every:
+        next_state_check_tstamp = now - check_camera_state_every
+
+      if now - next_day_night_setup_tstamp > 60:
+        next_day_night_setup_tstamp = now - 60
+
+      if now - next_photo_tstamp > take_photo_every:
+        next_photo_tstamp = now - take_photo_every
+
+      # Is a photo scheduled?
+      if next_photo_tstamp != NEVER:
+
+        # If the next daytime / nighttime reconfiguration attempt is scheduled
+        # too close before a photo, postpone it so the photo takes precedence
+        # and happens exactly on time
+        if 0 <= next_photo_tstamp - next_day_night_setup_tstamp <= 5:
+          next_day_night_setup_tstamp += POSTPONED
+
+        # If the next state check is scheduled too close before a photo, cancel
+        # it so the photo takes precedence and happens exactly on time
+        if 0 <= next_photo_tstamp - next_state_check_tstamp <= 5:
+          next_state_check_tstamp += POSTPONED
+
+      # Determine which event timeout is coming up next
+      next_event_tstamp = min(next_basic_setup_tstamp,
+				next_reboot_tstamp,
+				next_day_night_setup_tstamp,
+				next_state_check_tstamp,
+				next_photo_tstamp)
+
+      # Wait until the next event, if needed
+      wait_for = next_event_tstamp - now
+      if wait_for > 0:
+        sleep(wait_for)
+        now = time()
+
       # Should we reboot the camera?
-      if do_reboot:
+      if now >= next_reboot_tstamp:
 
         log(WARN, "Rebooting the camera")
         try:
           rt.reboot()
+          next_reboot_tstamp = NEVER
+          next_basic_setup_tstamp = now
+
         except Exception as e:
           log(ERROR, e)
-          continue
-
-        do_reboot = False
-        do_basic_setup = True
-        camera_set_for_daytime = None
+          next_reboot_tstamp = now
 
       # Should we do a basic setup of the camera?
-      if do_basic_setup:
+      elif now >= next_basic_setup_tstamp:
 
-        configure_camera_after_start(rt)
+        tries = configure_camera_after_start(rt)
 
-        do_basic_setup = False
-        next_shot_tstamp = time()
+        next_basic_setup_tstamp = NEVER
 
-      # Wait until the next shot, if needed
-      # Ping the camera while we wait, to keep the connection alive
-      wait_for = next_shot_tstamp - time()
-      late_by = -wait_for
-      ping = False
+        # If we have location data and daytime / nighttime reconfiguration
+        # hasn't been started, schedule the next daytime / nighttime
+        # reconfiguration rightaway
+        if location:
+          if next_day_night_setup_tstamp == NEVER:
+            camera_set_for_daytime = None	# Current setup presumed unknown
+            next_day_night_setup_tstamp = time()
 
-      if wait_for > 0:
-        log(INFO, "Waiting {:0.1f} s until next the shot".format(wait_for))
+        # We don't have location data:
+        else:
 
-        while wait_for > 0:
+          # If the shots are triggered by an external intervalometer and
+          # checking the state of the camera hasn't been started yet, schedule
+          # the next check
+          if args.intervalometer:
+            if next_state_check_tstamp == NEVER:
+              next_state_check_tstamp = time() + 1
 
-          if ping:
-            if wait_for > 2:
-              log(INFO, "Pinging the camera to keep the connection alive")
-              retry(rt, rt.check_for_updates, reconnect_tries = reconnect_tries)
-            ping = False
+          # We take the photos ourselves: if taking photos hasn't been started
+          # yet, schedule the next photo
+          elif next_photo_tstamp == NEVER:
+            next_photo_tstamp = time()
 
-          else:
-            sleep(min(wait_for, ping_camera_every))
-            ping = True
-
-          wait_for = next_shot_tstamp - time()
-
-      elif late_by > 0.5:
-        log(INFO, "Not waiting for the next shot as it is already "
-			"{:0.1f} s late".format(late_by))
-
-        # Make sure we never run more than one full cycle late
-        if late_by > grab_image_every:
-          next_shot_tstamp += late_by - grab_image_every
-          log(WARN, "Capping the lateness to {:0.1f} s".
-			format(grab_image_every))
-
-      # Get the battery's SoC, temperature, PCB temperature and camera errors
-      state = retry(rt, rt.get_state, reconnect_tries = reconnect_tries)
-
-      batt_percent = state["batteryLevel"] * 100
-      batt_state = state["_batteryState"]
-      batt_temp = state["_batteryTemp"]
-      pcb_temp = state["_boardTemp"]
-
-      errors = state["_cameraError"]
-
-      if errors:
-        errors = ",".join(errors)
-      else:
-        errors = "/"
-
-      log(INFO, "Batt {:0.0f}% ({}), {:0.1f}C - PCB {:0.1f}C - Errors: {}".
-			format(batt_percent, batt_state, batt_temp, pcb_temp,
-				errors))
-
-      # Do we have location data?
-      if location:
+      # Should we configure the camera for daytime or nighttime capture?
+      elif now >= next_day_night_setup_tstamp:
 
         # Get the time at the camera's location
-        now = datetime.now(timezone)
+        now_cam = datetime.fromtimestamp(now, timezone_cam)
 
         # try to calculate the nautical dawn and dusk times for today and
         # tomorrow - which may fail in high latitudes when the sun never rises
         # or never sets
         try:
 
-          tomorrow = now + timedelta(days = 1)
+          today_cam = now_cam.date()
+          tomorrow_cam = today_cam + timedelta(days = 1)
 
-          today_dawn_time = dawn(observer,
-					date = now.date(),
+          today_dawn_time_cam = dawn(observer,
+					date = today_cam,
 					depression = twilight_depression,
-					tzinfo = now.tzinfo)
+					tzinfo = timezone_cam)
 
-          today_dusk_time = dusk(observer,
-					date = now.date(),
+          today_dusk_time_cam = dusk(observer,
+					date = today_cam,
 					depression = twilight_depression,
-					tzinfo = now.tzinfo)
+					tzinfo = timezone_cam)
 
-          tomorrow_dawn_time = dawn(observer,
-					date = tomorrow.date(),
+          tomorrow_dawn_time_cam = dawn(observer,
+					date = tomorrow_cam,
 					depression = twilight_depression,
-					tzinfo = tomorrow.tzinfo)
+					tzinfo = timezone_cam)
 
           # Determine whether it's daytime or nighttime, and what time the next
           # dusk or dawn is
-          if now < today_dawn_time:
+          if now_cam < today_dawn_time_cam:
             is_daytime = False
-            next_dawn_dusk_time = today_dawn_time
+            next_dawn_dusk_time_cam = today_dawn_time_cam
 
-          elif now < today_dusk_time:
+          elif now_cam < today_dusk_time_cam:
             is_daytime = True
-            next_dawn_dusk_time = today_dusk_time
+            next_dawn_dusk_time_cam = today_dusk_time_cam
 
           else:
             is_daytime = False
-            next_dawn_dusk_time = tomorrow_dawn_time
-
-          log(INFO, "Camera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
-			format(now,
-				"day" if is_daytime else "night"))
-          log(INFO, "Next {}: {:%Y-%m-%d %H:%M:%S}".
-			format("dusk" if is_daytime else "dawn",
-				next_dawn_dusk_time))
+            next_dawn_dusk_time_cam = tomorrow_dawn_time_cam
 
         # If calculating dusk and dawn times failed: determine whether it's
         # daytime or nighttime by checking the elevation of the sun
         except:
 
-          is_daytime = elevation(observer, now) >= -twilight_depression
+          is_daytime = elevation(observer, now_cam) >= -twilight_depression
+          next_dawn_dusk_time_cam = None
 
-          log(INFO, "Cmaera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
-			format(now,
-				"day" if is_daytime else "night",
-				"dusk" if is_daytime else "dawn"))
+        # Should we configure or reconfigure the camera?
+        if is_daytime != camera_set_for_daytime:
 
-        # If we don't know whether the camera is setup for day or night shots,
-        # or if it's set for the wrong time of the day, reconfigure it
-        if is_daytime:
-          if camera_set_for_daytime is None or not camera_set_for_daytime:
-            configure_camera_for_daytime_capture(rt)
-            camera_set_for_daytime = True
+          log(INFO, "Camera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
+			format(now_cam, "day" if is_daytime else "night"))
 
-        else:	# nighttime
-          if camera_set_for_daytime is None or camera_set_for_daytime:
-            configure_camera_for_nighttime_capture(rt)
-            camera_set_for_daytime = False
+          if next_dawn_dusk_time_cam is not None:
+            log(INFO, "Next {}: {:%Y-%m-%d %H:%M:%S}".
+			format("dusk" if is_daytime else "dawn",
+				next_dawn_dusk_time_cam))
 
-      # Take a shot
-      log(INFO, "Taking a photo")
-      r  = retry(rt, rt.take_photo, reconnect_tries = reconnect_tries)
+          if is_daytime:
+            tries = configure_camera_for_daytime_capture(rt)
+          else:
+            tries = configure_camera_for_nighttime_capture(rt)
 
-      file_url = r["results"]["fileUrl"]
-      log(INFO, file_url)
+          # If the shots are triggered by an external intervalometer and we had
+          # to try more than once to set daytime or nighttime capture, it's
+          # probably because a shot was being taken, so ignore the retries
+          if args.intervalometer and tries > 1:
+            tries = 1
 
-      # Schedule the next shot
-      next_shot_tstamp += grab_image_every
+          camera_set_for_daytime = is_daytime
+
+        # Schedule the next daytime / nighttime reconfiguration attempt
+        if next_dawn_dusk_time_cam:
+          next_day_night_setup_tstamp += (next_dawn_dusk_time_cam - \
+						now_cam).seconds + 1
+        else:
+          next_day_night_setup_tstamp += 60
+
+        # If the shots are triggered by an external intervalometer and
+        # checking the state of the camera hasn't been started yet, schedule
+        # the next check
+        if args.intervalometer:
+          if next_state_check_tstamp == NEVER:
+            next_state_check_tstamp = time() + 1
+
+        # We take the photos ourselves: if taking photos hasn't been started
+        # yet, schedule the next photo
+        elif next_photo_tstamp == NEVER:
+          next_photo_tstamp = time()
+
+      # Should we take a photo?
+      elif now >= next_photo_tstamp:
+
+        log(INFO, "Taking a photo{}".format("" if wait_for > -0.5 else \
+						" (late by {:0.1f} s)".
+							format(-wait_for)))
+        r, tries  = retry(rt, rt.take_photo,
+				reconnect_tries = reconnect_tries)
+
+        file_url = r["results"]["fileUrl"]
+        log(INFO, file_url)
+
+        # Schedule the next photo
+        next_photo_tstamp += take_photo_every
+
+        # If daytime / nighttime reconfiguration has been postponed because it
+        # was too close before a photo event, let it go through at the next pass
+        if next_day_night_setup_tstamp > POSTPONED:
+          next_day_night_setup_tstamp -= POSTPONED
+
+        # If checking the state of the camera  has been postponed because it
+        # was too close before a photo event, let it go through at the next pass
+        if next_state_check_tstamp > POSTPONED:
+          next_day_night_setup_tstamp -= POSTPONED
+
+        # If checking the state of the camera hasn't been started yet, schedule
+        # the next check
+        if next_state_check_tstamp == NEVER:
+          next_state_check_tstamp = time() + 1
+
+      # Should we check the camera's state?
+      elif now >= next_state_check_tstamp:
+
+        state, tries = retry(rt, rt.get_state,
+				reconnect_tries = reconnect_tries)
+
+        batt_percent = state["batteryLevel"] * 100
+        batt_state = state["_batteryState"]
+        batt_temp = state["_batteryTemp"]
+        pcb_temp = state["_boardTemp"]
+
+        errors = state["_cameraError"]
+
+        if errors:
+          errors = ",".join(errors)
+        else:
+          errors = "/"
+
+        log(INFO, "Batt {:0.0f}% ({}), {:0.1f}C - PCB {:0.1f}C - Errors: {}".
+			format(batt_percent, batt_state, batt_temp, pcb_temp,
+				errors))
+
+        # Schedule the next state check
+        next_state_check_tstamp += check_camera_state_every
 
     except RuntimeError as e:
 
       if not str(e).startswith("THETA"):
         raise
 
-      do_reboot = True
+      next_day_night_setup_tstamp = NEVER
+      next_state_check_tstamp = NEVER
+      next_photo_tstamp = NEVER
+
+      # Only reboot the camera if we take the photos ourselves
+      if args.intervalometer:
+        next_basic_setup_tstamp = time()
+      else:
+        next_reboot_tstamp = time()
 
 
 
