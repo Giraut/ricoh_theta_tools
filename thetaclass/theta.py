@@ -4,6 +4,7 @@
 ### Parameters
 from .default import _default_connect_timeout, \
 			_default_reconnect_tries, \
+			_stitching_time, \
 			_default_request_timeout, \
 			_default_stop_video_capture_timeout, \
 			_default_file_operations_timeout, \
@@ -1799,20 +1800,19 @@ class Theta:
       now = time()
       start_wait_tstamp = now
       stop_wait_tstamp = start_wait_tstamp + wait_photo_taken
-      polls_count = 0
+      next_poll_tstamp = start_wait_tstamp + _stitching_time
 
       # As long as the command is in progress, or we should keep waitinga for
       # the photo to be taken, poll the status of the command
       while state == "inProgress" and now < stop_wait_tstamp:
 
         # Wait before polling if needed
-        polls_count += 1
-        next_poll_tstamp = start_wait_tstamp + \
-				check_photo_taken_every * polls_count
         wait_for = next_poll_tstamp - now
 
         if wait_for > 0:
           sleep(wait_for)
+
+        next_poll_tstamp += check_photo_taken_every
 
         # Poll the status of the command
         json_resp = \
