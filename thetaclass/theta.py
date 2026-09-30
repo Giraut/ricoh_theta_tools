@@ -1837,6 +1837,29 @@ class Theta:
 
 
 
+  def stop_self_timer(self,
+			connect_timeout = _default_connect_timeout,
+			reconnect_tries = _default_reconnect_tries,
+			read_timeout = _default_stop_video_capture_timeout):
+    """Stop the self-timer if an exposure delay is set and video capture was
+    started of a photo was triggered
+    """
+
+    json_resp = self._execute(cmd = "camera._stopSelfTimer",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+    assert "state" in json_resp, \
+		"malformed JSON response: missing state"
+    json_resp_state = json_resp["state"]
+    assert json_resp_state == "done", \
+		'command returned state "{}"'.format(json_resp_state)
+
+    return json_resp
+
+
+
   def get_storage_info(self,
 			connect_timeout = _default_connect_timeout,
 			reconnect_tries = _default_reconnect_tries,
