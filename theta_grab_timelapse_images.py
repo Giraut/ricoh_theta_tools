@@ -88,7 +88,7 @@ NEVER = POSTPONED
 
 
 ### Routines
-def configure_camera_after_start(rt):
+def configure_camera_basic_setup(rt):
   """Configure the camera before starting the capture or after rebooting it
   Return the number of tries
   """
@@ -380,7 +380,7 @@ def main():
       # Should we do a basic setup of the camera?
       elif now >= next_basic_setup_tstamp:
 
-        tries = configure_camera_after_start(rt)
+        tries = configure_camera_basic_setup(rt)
 
         next_basic_setup_tstamp = NEVER
 
