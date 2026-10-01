@@ -743,8 +743,8 @@ class Theta:
     This password may be set for the first time using Ricoh's new Ricoh360
     Android app (com.ricoh360.mobile), or it may be set using this class by
     connecting to the camera in wifi AP mode - aka "direct mode", instanciating
-    the class with the camera's IP in AP mode (ormally 192.168.1.1) and password
-    set to None, then calling this method.
+    the class with the camera's IP in AP mode (normally 192.168.1.1) and
+    client-mode password set to None, then calling this method.
 
     The password may only be set when connected to the camera in AP mode - aka
     "direct mode".
@@ -753,6 +753,11 @@ class Theta:
     # Sanity-check the arguments
     assert isinstance(password, str), \
 		"password should be a string"
+    assert 8 <= len(password) <= 63, \
+		"password should be between 8 and 63 characters long"
+    assert '"' not in password.replace(r'\\', "").replace(r'\"', "").\
+			replace('\\', '"'), \
+		r'\ and " should be escaped with backslash in password'
 
     return self._set_option("_password", password,
 				connect_timeout = connect_timeout,
@@ -940,6 +945,42 @@ class Theta:
 		"volume out of range - should be >= 0 and <= 100"
 
     return self._set_option("_shutterVolume", volume,
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
+  def set_wlan_password(self,
+			password,
+			connect_timeout = _default_connect_timeout,
+			reconnect_tries = _default_reconnect_tries,
+			read_timeout = _default_request_timeout):
+    """Set the WLAN AP password (different from the client-mode password!)
+
+    This is the password used to connect to the camera in wifi AP mode - aka
+    "direct mode"
+
+    This password may be set using this class by connecting to the camera in
+    wifi AP mode using the default wifi password visible in the "Communication
+    information" menu, instanciating the class with the camera's IP in AP mode
+    (normally 192.168.1.1) and client-mode password set to None, then calling
+    this method.
+
+    The password may only be set when connected to the camera in AP mode - aka
+    "direct mode".
+    """
+
+    # Sanity-check the arguments
+    assert isinstance(password, str), \
+		"password should be a string"
+    assert 8 <= len(password) <= 63, \
+		"password should be between 8 and 63 characters long"
+    assert '"' not in password.replace(r'\\', "").replace(r'\"', "").\
+			replace('\\', '"'), \
+		r'\ and " should be escaped with backslash in password'
+
+    return self._set_option("wifiPassword", password,
 				connect_timeout = connect_timeout,
 				reconnect_tries = reconnect_tries,
 				read_timeout = read_timeout)

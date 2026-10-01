@@ -224,6 +224,11 @@ def main():
 	  help = "Get or set the shutter volume"
 	)
 
+  subparser_wlanpassword = subparsers.add_parser(
+	  "wlanpassword",
+	  help = "Set the WLAN password when connected in AP mode"
+	)
+
   subparser_wlanantenna = subparsers.add_parser(
 	  "wlanantenna",
 	  help = "Get or set the WLAN antenna config when connected in AP mode"
@@ -388,6 +393,12 @@ def main():
 	  default = None,
 	  help = "Shutter volume to set. Get the current shutter volume "
 			"if omitted"
+	)
+
+  subparser_wlanpassword.add_argument(
+	  "password",
+	  type = str,
+	  help = "WLAN AP password to set"
 	)
 
   subparser_wlanantenna.add_argument(
@@ -617,6 +628,16 @@ def main():
 
   args = argparser.parse_args()
 
+  # If the command is "password", "wlanpassword" or "wlanantenna", it is meant
+  # to be executed with the computer connected to the camera configured in
+  # wifi AP mode - aka "direct mode"
+  #
+  # Any other command is meant to be executed with the camera connected to a
+  # wifi AP in client mode
+  is_direct_mode_command = args.command in ("password",
+						"wlanpassword",
+						"wlanantenna")
+
   # Try to read the name of the previously-used camera in the save file
   try:
     with open(current_theta_camera_name_file, "r") as f:
@@ -635,15 +656,15 @@ def main():
 		"-c / --camera".format(current_theta_camera_name_file))
     return -1
 
-  # Load the Theta cameras' names and credentials file if the command is not
-  # "password" or "wlanantenna"
-  if args.command not in ("password", "wlanantenna"):
+  # Load the Theta cameras' names and credentials file if the command is not a
+  # direct-mode command
+  if not is_direct_mode_command:
     with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
       theta_cameras_credentials = json.load(f)
 
-  if args.camera not in theta_cameras_credentials:
-    print('[ERROR] Unknown camera "{}"'.format(args.camera))
-    return -1
+    if args.camera not in theta_cameras_credentials:
+      print('[ERROR] Unknown camera "{}"'.format(args.camera))
+      return -1
 
   # If the name is different from the one in the save file, or there was no
   # existing file, or it was empty, update the file
@@ -660,8 +681,8 @@ def main():
     args.camera = prev_camera_name
 
   # Load the Theta cameras' names and credentials file if the command is not
-  # "password" or "wlanantenna"
-  if args.command not in ("password", "wlanantenna"):
+  # a direct-mode command
+  if not is_direct_mode_command:
     with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
       theta_cameras_credentials = json.load(f)
 
@@ -671,14 +692,12 @@ def main():
 
     # Open the camera
     #
-    # If the command is not "password" or "wlanantenna", it is meant to be
-    # executed with the cmaera connected to a wifi AP in client mode: use the
+    # If the command is not a direct-mode command, use the client-mode
     # credentials from the names and credentials file to authenticate with it
     #
-    # If the command is "password" or "wlanantenna", it is meant to be executed
-    # with the computer connected to the camera in configured in wifi AP mode:
-    # set the camera's IP to 192.168.1.1 and no credentials
-    if args.command not in ("password", "wlanantenna"):
+    # If the command is a direct-mode command, set the camera's IP to
+    # 192.168.1.1 and no credentials
+    if not is_direct_mode_command:
       rt = Theta(**theta_cameras_credentials[args.camera])
     else:
       rt = Theta(addr = "192.168.1.1", username = None, password = None)
@@ -733,6 +752,10 @@ def main():
         print(rt.get_shutter_volume())
       else:
         prettyprint(rt.set_shutter_volume(args.volume))
+
+    # Set the WLAN AP password
+    elif args.command == "wlanpassword":
+      prettyprint(rt.set_wlan_password(args.password))
 
     # Get or set the WLAN antenna configuration
     elif args.command == "wlanantenna":
