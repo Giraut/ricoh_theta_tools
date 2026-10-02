@@ -2144,19 +2144,28 @@ class Theta:
     If save_fname == "", reuse the name of the file in the camera
     """
 
+    file_url_pattern_match = self.__file_url_regex.match(file_url)
+
     # Sanity-check the arguments
     assert isinstance(file_url, str) and file_url != "", \
 		"file_url required and should be a string"
-    assert self.__file_url_regex.match(file_url), \
+    assert file_url_pattern_match, \
 		"URL doesn't match the Theta URL pattern"
     assert isinstance(save_dir, str), \
 		"save_dir is required and should be a string"
     assert isinstance(save_fname, str), \
 		"save_fname is required and should be a string"
 
+    # Rewrite the URL with the address we know, which may be different from the
+    # one the camera knows if we use a FQDN or the connection is redirected
+    file_url = "http://{}/files/{}{}{}".format(self.addr,
+						file_url_pattern_match[2],
+						file_url_pattern_match[3],
+						file_url_pattern_match[4])
+
     # If the save filename is unsecified, use the one from the camera
     if not save_fname:
-      save_fname = self.__file_url_regex.match(file_url)[4]
+      save_fname = file_url_pattern_match[4]
 
     fpath = os.path.join(save_dir, save_fname)
 
