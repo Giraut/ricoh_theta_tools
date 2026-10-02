@@ -31,6 +31,7 @@ except:
 ### Parameters
 take_photo_every = 30 #s
 check_camera_state_every = 300 #s
+run_camera_in_silent_powermode = True
 retries = 20
 wait_before_retry = 2 #s
 reconnect_tries = 5
@@ -93,15 +94,22 @@ def configure_camera_basic_setup(rt):
   Return the number of tries
   """
 
-  log(INFO, "Basic camera setup: UI = locked")
-  log(INFO, "Basic camera setup: shutter volume = 0")
+  if run_camera_in_silent_powermode:
+    log(INFO, "Basic camera setup: power mode = silent")
+  else:
+    log(INFO, "Basic camera setup: UI = locked")
+    log(INFO, "Basic camera setup: shutter volume = 0")
   log(INFO, "Basic camera setup: capture mode = image")
   log(INFO, "Basic camera setup: stitching mode = static")
 
-  options = {"_cameraControlSource": "app",
-		"_shutterVolume": 0,
-		"captureMode": "image",
-		"_imageStitching": "static"}
+  if run_camera_in_silent_powermode:
+    options = {"_cameraPower": "silentMode"}
+  else:
+    options = {"_cameraControlSource": "app",
+		"_shutterVolume": 0}
+  options = {**options,
+		**{"captureMode": "image",
+			"_imageStitching": "static"}}
 
   _, tries = retry(rt, rt._set_options, options,
 			reconnect_tries = reconnect_tries)
@@ -258,6 +266,13 @@ def main():
 			"an external intervalometer, but still monitor the "
 			"state of the camera, and automatically reconfigure "
 			"it for daytime and nighttime capture at dawn and dusk",
+	  action = "store_true"
+	)
+
+  argparser.add_argument(
+	  "-d", "--download",
+	  help = "If we take the photos, download each photo in the current "
+			"directory after taking it",
 	  action = "store_true"
 	)
 
@@ -510,7 +525,23 @@ def main():
 				reconnect_tries = reconnect_tries)
 
         file_url = r["results"]["fileUrl"]
-        log(INFO, file_url)
+
+        t1 = time()
+        log(INFO, "Done in {:0.1f} s".format(t1 - now))
+
+        # Download the photo if needed
+        if args.download:
+
+          log(INFO, "Downloading {}".format(file_url))
+
+          _, tries  = retry(rt, rt.download_file, file_url,
+				reconnect_tries = reconnect_tries)
+
+          t2 = time()
+          log(INFO, "Done in {:0.1f} s".format(t2 - t1))
+
+        else:
+          log(INFO, file_url)
 
         # Schedule the next photo
         next_photo_tstamp += take_photo_every
