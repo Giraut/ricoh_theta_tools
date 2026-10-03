@@ -39,7 +39,40 @@ except:
 #   },
 #   ...
 # }
+#
+# The file may also contain entries with "username" and "password" set to null
+# to access the camera in direct mode (i.e. camera acting as a wifi AP).
+# By default, if "ap" is not defined in the file, the program automatically
+# understands the name as:
+#
+#   ...
+#   "ap": {
+#     "addr": "192.168.1.1",
+#     "username": null,
+#     "password": null
+#   },
+#   ...
+#
+#
+# The address may also contain a port, if the connection to the camera is
+# redirected (for instance with ssh: "ssh remote_machine -L8000:camera_ip:80"),
+# like:
+#
+#   ...
+#   "redirected_ap": {
+#     "addr": "localhost:8000",
+#     "username": null,
+#     "password": null
+#   },
+#   ...
+
 theta_cameras_credentials_file = "~/.ricoh_theta_creds.json"
+default_ap_entry = {"ap": {
+			  "addr": "192.168.1.1",
+			  "username": None,
+			  "password": None
+			  }
+			}
 
 # File containing the name of the previous Theta camera addressed by this tool
 #
@@ -179,10 +212,13 @@ def main():
   argparser.add_argument(
 	  "-c", "--camera",
 	  type = str,
-	  help = "Name of the camera to use, declared in {}. If omitted, use "
-			"name saved in {}".
-			format(theta_cameras_credentials_file,
-				current_theta_camera_name_file)
+	  help = 'Name of the camera to use, declared in {f1}, or "ap" to '
+			'access the camera in direct mode at 192.168.1.1 with '
+			'no credentials ("ap" may be redefined in {f1}). '
+			'If omitted, use the name saved in {f2} or default to '
+			'"ap" for direct-mode commands'.
+			format(f1 = theta_cameras_credentials_file,
+				f2 = current_theta_camera_name_file)
 	).completer = theta_camera_names_completer
 
   # Subparsers
@@ -190,14 +226,17 @@ def main():
 	  "info",
 	  help = "Query camera information"
 	)
+
   subparser_state = subparsers.add_parser(
 	  "state",
 	  help = "Query the state of the camera"
 	)
+
   subparser_password = subparsers.add_parser(
 	  "password",
 	  help = "Set the client-mode password when connected in AP mode"
 	)
+  subparser_password.set_defaults(is_direct_mode_command = True)
 
   subparser_eventlog = subparsers.add_parser(
 	  "eventlog",
@@ -205,7 +244,7 @@ def main():
 	)
 
   subparser_powermode = subparsers.add_parser(
-	  "powermode",
+	  "power",
 	  help = "Get or set the power mode"
 	)
 
@@ -228,11 +267,13 @@ def main():
 	  "wlanpassword",
 	  help = "Set the WLAN password when connected in AP mode"
 	)
+  subparser_wlanpassword.set_defaults(is_direct_mode_command = True)
 
   subparser_wlanantenna = subparsers.add_parser(
 	  "wlanantenna",
 	  help = "Get or set the WLAN antenna config when connected in AP mode"
 	)
+  subparser_wlanantenna.set_defaults(is_direct_mode_command = True)
 
   subparser_gps = subparsers.add_parser(
 	  "gps",
@@ -628,47 +669,74 @@ def main():
 
   args = argparser.parse_args()
 
-  # If the command is "password", "wlanpassword" or "wlanantenna", it is meant
-  # to be executed with the computer connected to the camera configured in
-  # wifi AP mode - aka "direct mode"
-  #
+  theta_cameras_credentials = None
+  save_camera_name = True
+
+  default_ap_camera_name = list(default_ap_entry.keys())[0]
+
+  # If the command is a direct-mode command, it is meant to be executed with the
+  # computer connected to the camera configured in wifi AP mode
   # Any other command is meant to be executed with the camera connected to a
   # wifi AP in client mode
-  is_direct_mode_command = args.command in ("password",
-						"wlanpassword",
-						"wlanantenna")
+  is_direct_mode_command = getattr(args, "is_direct_mode_command", False)
 
-  # Try to read the name of the previously-used camera in the save file
-  try:
-    with open(current_theta_camera_name_file, "r") as f:
-      prev_camera_name = json.load(f)["name"]
-    assert isinstance(prev_camera_name, str) and prev_camera_name
-  except:
+  # If no camera name was supplied and the command is a direct-mode command,
+  # define the camera name to use as the default one for AP, disable saving
+  # the name and set the credentials to the default entry for AP as a fallback
+  if not args.camera and is_direct_mode_command:
+    args.camera = default_ap_camera_name
+    save_camera_name = False
+    theta_cameras_credentials = default_ap_entry
+
+  # Try to read the name of the previously-used camera in the save file if we're
+  # even supposed to save the camera name. Silently fail
+  if save_camera_name:
+    try:
+      with open(current_theta_camera_name_file, "r") as f:
+        prev_camera_name = json.load(f)["name"]
+      assert isinstance(prev_camera_name, str) and prev_camera_name
+    except:
+      prev_camera_name = None
+  else:
     prev_camera_name = None
 
   # If no camera name was supplied, use the previous name instead
   if not args.camera:
     args.camera = prev_camera_name
 
-  # If we don't have a camera name, throw an error
+  # If we still don't have a camera name, throw an error
   if not args.camera:
     print("[ERROR] Cannot get camera name from {}. Supply it with "
 		"-c / --camera".format(current_theta_camera_name_file))
     return -1
 
-  # Load the Theta cameras' names and credentials file if the command is not a
-  # direct-mode command
-  if not is_direct_mode_command:
+  # Load the Theta cameras' names and credentials file. If there's an error
+  # loading the file and we don't already have default credentials, throw an
+  # error. Otherwise silently fail
+  try:
     with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
       theta_cameras_credentials = json.load(f)
-
-    if args.camera not in theta_cameras_credentials:
-      print('[ERROR] Unknown camera "{}"'.format(args.camera))
+  except Exception as e:
+    if theta_cameras_credentials is None:
+      print("[ERROR] Cannot load {}: {}".
+		format(theta_cameras_credentials_file, e))
       return -1
 
-  # If the name is different from the one in the save file, or there was no
-  # existing file, or it was empty, update the file
-  if prev_camera_name is None or prev_camera_name != args.camera:
+  # If the credentials don't include an entry for AP, add the default entry
+  if default_ap_camera_name not in theta_cameras_credentials:
+    theta_cameras_credentials[default_ap_camera_name] = \
+					default_ap_entry[default_ap_camera_name]
+
+  # If the camera name is not defined, throw an error
+  if args.camera not in theta_cameras_credentials:
+    print('[ERROR] Unknown camera "{}"'.format(args.camera))
+    return -1
+
+  # If we should save the camera name, the name is different from the one in
+  # the save file, there was no existing file, or the file was empty, update
+  # the file
+  if save_camera_name and (prev_camera_name is None or \
+				prev_camera_name != args.camera):
     try:
       with open(current_theta_camera_name_file, "w") as f:
         print(json.dumps({"name": args.camera}, indent = 2), file = f)
@@ -676,31 +744,10 @@ def main():
       print("[WARNING] Cannot save camera name in {}".
 		format(current_theta_camera_name_file))
 
-  # No camera name supplied
-  else:
-    args.camera = prev_camera_name
-
-  # Load the Theta cameras' names and credentials file if the command is not
-  # a direct-mode command
-  if not is_direct_mode_command:
-    with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
-      theta_cameras_credentials = json.load(f)
-
-    assert args.camera in theta_cameras_credentials
-
   try:
 
     # Open the camera
-    #
-    # If the command is not a direct-mode command, use the client-mode
-    # credentials from the names and credentials file to authenticate with it
-    #
-    # If the command is a direct-mode command, set the camera's IP to
-    # 192.168.1.1 and no credentials
-    if not is_direct_mode_command:
-      rt = Theta(**theta_cameras_credentials[args.camera])
-    else:
-      rt = Theta(addr = "192.168.1.1", username = None, password = None)
+    rt = Theta(**theta_cameras_credentials[args.camera])
 
     # Execute the command:
 
@@ -722,7 +769,7 @@ def main():
         print(l)
 
     # Get or set the power mode
-    elif args.command == "powermode":
+    elif args.command == "power":
       if args.mode is None:
         print(rt.get_power_mode())
       else:
