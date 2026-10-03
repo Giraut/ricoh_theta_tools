@@ -31,7 +31,7 @@ except:
 ### Parameters
 take_photo_every = 30 #s
 check_camera_state_every = 300 #s
-run_camera_in_silent_powermode = True
+run_camera_in_silent_powermode = False
 retries = 20
 wait_before_retry = 2 #s
 reconnect_tries = 5
