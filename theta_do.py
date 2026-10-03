@@ -113,17 +113,20 @@ video_file_extensions = ["mp4", "webm", "avi", "mov", "mpg"]
 ### Routines
 def theta_camera_names_completer(**kwargs):
   """Argcomplete completer that returns all the names of the cameras declared in
-  the Theta cameras' names and credentials file
+  the Theta cameras' names and credentials file + "ap" (if it's not already in
+  declared the file)
   """
 
   global theta_cameras_credentials_file
 
   try:
     with open(theta_cameras_credentials_file, "r") as f:
-      camera_names = json.load(f).keys()
+      camera_names = set(json.load(f).keys())
 
   except:
-    camera_names = ()
+    camera_names = set()
+
+  camera_names.add("ap")
 
   return camera_names
 
