@@ -14,3 +14,46 @@ Version 1.2.0 - 23/09/2026 - Added support for WLAN antenna configuration,
                              camera for static switching, to avoid deforming
                              star trails along the stitc line
                            - Various bugfixes
+Version 1.3.0 - 04/10/2026 - Added support to turn bluetooth on/off, stop the
+                             self-timer, setting the WLAN AP password to the
+                             class and the theta_do.py utility
+                           - Added inplicit "ap" camera in theta_do.py, to
+                             address the camera in direct mode (maybe be
+                             redefined in the credentials file). Direct-mode
+                             commands use use the "ap" camera by default if no
+                             other name is supplied
+                           - list files in ISO 8601 format rather than Ricoh's
+                             nonstandard format
+                           - Less aggressive polling to wait for a photo to be
+                             taken, to prevent overloading the camera's embedded
+                             web server
+                           - Recoded theta_grab_timelapse_images.py to handle
+                             taking photos, querying the state of the camera and
+                             reconfiguring it for daytime or nighttime capture
+                             as separate events with their own schedule.
+                           - theta_grab_timelapse_images.py now turns off the
+                             camera when the battery drops below 30% to prevent
+                             damage to the cell
+                           - theta_grab_timelapse_images.py saves the current
+                             events' timestamps so that, if it's stopped and
+                             immediately restarted for some reason, it resumes
+                             the previous events' schedule. This is mostly
+                             useful to keep taking photos at the same intervals
+                             even if the script has to be restarted
+                           - In theta_grab_timelapse_images.py, added
+                             -i / --intervalometer option to skip taking photos,
+                             but otherwise keep querying the state of the camera
+                             and reconfigure it for daytime / nighttime capture.
+                             This is useful when the shots are triggered by an
+                             external intervalometer - typically bluetooth -
+                             to prevent disrupting the timing of the photos if
+                             the wifi link is not very good - in other words,
+                             the photos are always taken on time, but the camera
+                             monitoring and daytime / nighttime reconfiguration
+                             may fail temporarily, which is less of a problem
+                           - Don't take timelapse photos in silent mode, but
+                             instead lock the UI and mute the shutter, as silent
+                             mode seems to make the wifi connection - and
+                             possibly the entire camera - unstable over time.
+                           - Bugfixes
+                             
