@@ -55,6 +55,32 @@ twilight_depression = Depression.NAUTICAL.value # sun ~12 deg below the horizon
 #   },
 #   ...
 # }
+#
+# The file may also contain entries with "username" and "password" set to null
+# to access the camera in direct mode (i.e. camera acting as a wifi AP).
+# Typically, the entry would look like this if the computer is connected
+# directly to the camera's wifi AP:
+#
+#   ...
+#   "ap": {
+#     "addr": "192.168.1.1",
+#     "username": null,
+#     "password": null
+#   },
+#   ...
+#
+#
+# The address may also contain a port, if the connection to the camera is
+# redirected (for instance with ssh: "ssh remote_machine -L8000:camera_ip:80"),
+# like:
+#
+#   ...
+#   "redirected_ap": {
+#     "addr": "localhost:8000",
+#     "username": null,
+#     "password": null
+#   },
+#   ...
 theta_cameras_credentials_file = "~/.ricoh_theta_creds.json"
 
 # Theta cameras' location file (optional)

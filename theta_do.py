@@ -65,7 +65,6 @@ except:
 #     "password": null
 #   },
 #   ...
-
 theta_cameras_credentials_file = "~/.ricoh_theta_creds.json"
 default_ap_entry = {"ap": {
 			  "addr": "192.168.1.1",
