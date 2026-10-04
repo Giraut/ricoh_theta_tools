@@ -103,9 +103,9 @@ theta_cameras_credentials_file = "~/.ricoh_theta_creds.json"
 # }
 theta_cameras_locations_file = "~/.ricoh_theta_location.json"
 
-# File to store event timestamps, in case the script stops (or is stopped) and
-# immediately restarted, to keep the timing of the photos correct
-event_timestamps_file = "~/.ricoh_theta_timelapse_grab_event_timestamps.json"
+# File to store event timestamps (per camera), in case the script stops (or is
+# stopped) and immediately restarted, to keep the timing of the photos correct
+event_timestamps_file = "~/.ricoh_theta_timelapse_grab_event_timestamps-{}.json"
 
 
 
@@ -376,12 +376,13 @@ def main():
 
   # Try to reload event timings from the save file, in case the script was
   # stopped and restarted, to keep the timing of the photos correct
-  # Don't use timestamps that are too far in the past
+  # Don't use timestamps that are too far in the past or in the future
   now = time()
 
   try:
 
-    with open(os.path.expanduser(event_timestamps_file), "r") as f:
+    with open(os.path.expanduser(event_timestamps_file.format(args.camera)),
+		"r") as f:
       j = json.load(f)
 
     saved_next_day_night_setup_tstamp = j["next_day_night_setup_tstamp"]
@@ -421,7 +422,8 @@ def main():
       log(WARN, "Saved next photo scheduled too far in the past")
       use_saved_tstamps = False
 
-    if saved_next_photo_tstamp - now > take_photo_every:
+    if saved_next_photo_tstamp  < POSTPONED and \
+		saved_next_photo_tstamp - now > take_photo_every:
       log(WARN, "Saved next photo scheduled too far in the future")
       use_saved_tstamps = False
 
@@ -438,7 +440,7 @@ def main():
 
   except Exception as e:
     log(WARN, "Could not load event timestamps from {}: {}".
-		format(event_timestamps_file, str(e)))
+		format(event_timestamps_file.format(args.camera), str(e)))
 
   tries = 0
 
@@ -451,7 +453,8 @@ def main():
       # Save the timestamps, in case the script stops but restarts soon enough
       # afterward that we can reuse them
       try:
-        with open(os.path.expanduser(event_timestamps_file), "w") as f:
+        with open(os.path.expanduser(event_timestamps_file.format(args.camera)),
+			"w") as f:
           j = {"next_day_night_setup_tstamp": next_day_night_setup_tstamp,
 		"next_state_check_tstamp": next_state_check_tstamp,
 		"next_photo_tstamp": next_photo_tstamp}
@@ -459,7 +462,7 @@ def main():
 
       except Exception as e:
         log(WARN, "Could not save event timestamps in {}: {}".
-		format(event_timestamps_file, str(e)))
+		format(event_timestamps_file.format(args.camera), str(e)))
 
       # If the last command took more than one try to go through, redo the basic
       # setup of the camera because it has probably lost its marbles
