@@ -32,6 +32,7 @@ except:
 take_photo_every = 30 #s
 check_camera_state_every = 300 #s
 run_camera_in_silent_powermode = False
+turn_off_camera_when_battery_below = 30 #%
 retries = 20
 wait_before_retry = 2 #s
 reconnect_tries = 5
@@ -376,6 +377,8 @@ def main():
         next_day_night_setup_tstamp = now - 60
 
       if now - next_photo_tstamp > take_photo_every:
+        log(WARN, "Capping the next shot's lateness to {} s".
+		format(take_photo_every))
         next_photo_tstamp = now - take_photo_every
 
       # Is a photo scheduled?
@@ -608,6 +611,19 @@ def main():
         log(INFO, "Batt {:0.0f}% ({}), {:0.1f}C - PCB {:0.1f}C - Errors: {}".
 			format(batt_percent, batt_state, batt_temp, pcb_temp,
 				errors))
+
+        # Turn off the camera if the battery is too low
+        if batt_percent < turn_off_camera_when_battery_below:
+
+          log(INFO, "Battery below {}%: turning off camera".
+		format(turn_off_camera_when_battery_below))
+
+          while True:
+            try:
+              rt.set_power_mode("off")
+              return 0
+            except:
+              sleep(1)
 
         # Schedule the next state check
         next_state_check_tstamp += check_camera_state_every
