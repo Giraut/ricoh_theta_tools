@@ -103,6 +103,10 @@ theta_cameras_credentials_file = "~/.ricoh_theta_creds.json"
 # }
 theta_cameras_locations_file = "~/.ricoh_theta_location.json"
 
+# File to store event timestamps, in case the script stops (or is stopped) and
+# immediately restarted, to keep the timing of the photos correct
+event_timestamps_file = "~/.ricoh_theta_timelapse_grab_event_timestamps.json"
+
 
 
 ## Defines
@@ -192,10 +196,8 @@ def theta_camera_names_completer(**kwargs):
   the Theta cameras' names and credentials file
   """
 
-  global theta_cameras_credentials_file
-
   try:
-    with open(theta_cameras_credentials_file, "r") as f:
+    with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
       camera_names = json.load(f).keys()
 
   except:
@@ -275,8 +277,6 @@ def main():
   """Main routine
   """
 
-  global theta_cameras_credentials_file
-
   # Parse the command line arguments
   argparser = argparse.ArgumentParser()
 
@@ -303,46 +303,64 @@ def main():
 	  action = "store_true"
 	)
 
-  # Expand the tilde in configuration files
-  theta_cameras_credentials_file = \
-			os.path.expanduser(theta_cameras_credentials_file)
-
   if "argcomplete" in globals():
     argcomplete.autocomplete(argparser, always_complete_options = False)
 
   args = argparser.parse_args()
 
   # Load the Theta cameras' names and credentials file
-  with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
-    theta_cameras_credentials = json.load(f)
+  try:
+    with open(os.path.expanduser(theta_cameras_credentials_file), "r") as f:
+      theta_cameras_credentials = json.load(f)
+
+  except Exception as e:
+    log(ERROR, "Cannot load names and credentials file {}: {}".
+		format(theta_cameras_credentials_file, str(e)))
+    return -1
+
+  if args.camera not in theta_cameras_credentials:
+    log(ERROR, 'Camera "{}" not found in {}'.
+		format(args.camera, theta_cameras_credentials_file))
+    return -1
 
   # Try to load the Theta cameras' location file and figure out the location's
   # timezone. If the it doesn't exist, just log a warning
   fp = os.path.expanduser(theta_cameras_locations_file)
-  if os.path.exists(os.path.expanduser(fp)):
+  if os.path.exists(fp):
 
-    with open(fp, "r") as f:
-      theta_cameras_locations = json.load(f)
+    try:
+      with open(fp, "r") as f:
+        theta_cameras_locations = json.load(f)
 
-    location = theta_cameras_locations[args.camera]
+    except Exception as e:
+      log(ERROR, "Cannot load camera locations file {}: {}".
+			format(theta_cameras_locations_file, str(e)))
+      return -1
 
-    latitude = location["latitude"]
-    longitude = location["longitude"]
-    altitude = location["altitude"]
+    if args.camera in theta_cameras_locations:
 
-    observer = Observer(latitude = latitude,
+      location = theta_cameras_locations[args.camera]
+
+      latitude = location["latitude"]
+      longitude = location["longitude"]
+      altitude = location["altitude"]
+
+      observer = Observer(latitude = latitude,
 			longitude = longitude,
 			elevation = altitude)
 
-    timezone_cam_name = TimezoneFinder().timezone_at(lat = latitude,
+      timezone_cam_name = TimezoneFinder().timezone_at(lat = latitude,
 							lng = longitude)
-    timezone_cam = ZoneInfo(timezone_cam_name)
+      timezone_cam = ZoneInfo(timezone_cam_name)
+
+    else:
+      location = None
+      log(WARN, 'Location of camera "{}" not found in {}: no auto day/night '
+		'config'.format(args.camera, theta_cameras_locations_file))
 
   else:
     location = None
     log(WARN, "No camera locations file found: no auto day/night config")
-
-  assert args.camera in theta_cameras_credentials
 
   # Open the camera
   rt = Theta(**theta_cameras_credentials[args.camera])
@@ -356,6 +374,72 @@ def main():
   next_state_check_tstamp = NEVER
   next_photo_tstamp = NEVER
 
+  # Try to reload event timings from the save file, in case the script was
+  # stopped and restarted, to keep the timing of the photos correct
+  # Don't use timestamps that are too far in the past
+  now = time()
+
+  try:
+
+    with open(os.path.expanduser(event_timestamps_file), "r") as f:
+      j = json.load(f)
+
+    saved_next_day_night_setup_tstamp = j["next_day_night_setup_tstamp"]
+    saved_next_state_check_tstamp = j["next_state_check_tstamp"]
+    saved_next_photo_tstamp = j["next_photo_tstamp"]
+
+    assert type(saved_next_day_night_setup_tstamp) in (int, float), \
+		"Saved next_day_night_setup_tstamp should be an int or a float"
+    assert type(saved_next_state_check_tstamp) in (int, float), \
+		"Saved next_state_check_tstamp should be an int or a float"
+    assert type(saved_next_photo_tstamp) in (int, float), \
+		"Saved next_photo_tstamp should be an int or a float"
+
+    use_saved_tstamps = True
+
+    if now - saved_next_day_night_setup_tstamp > 60 * 2:
+      log(WARN, "Saved next daytime / nighttime reconfiguration attempt "
+		"scheduled too far in the past")
+      use_saved_tstamps = False
+
+    if saved_next_day_night_setup_tstamp < POSTPONED and \
+		saved_next_day_night_setup_tstamp - now > 12 * 60 * 60:
+      log(WARN, "Saved next daytime / nighttime reconfiguration attempt "
+		"scheduled too far in the future")
+      use_saved_tstamps = False
+
+    if now - saved_next_state_check_tstamp > check_camera_state_every * 2:
+      log(WARN, "Saved camera check scheduled too far in the past")
+      use_saved_tstamps = False
+
+    if saved_next_state_check_tstamp < POSTPONED and \
+		saved_next_state_check_tstamp - now > check_camera_state_every:
+      log(WARN, "Saved camera check scheduled too far in the future")
+      use_saved_tstamps = False
+
+    if now - saved_next_photo_tstamp > take_photo_every * 2:
+      log(WARN, "Saved next photo scheduled too far in the past")
+      use_saved_tstamps = False
+
+    if saved_next_photo_tstamp - now > take_photo_every:
+      log(WARN, "Saved next photo scheduled too far in the future")
+      use_saved_tstamps = False
+
+    if use_saved_tstamps:
+
+      next_day_night_setup_tstamp = saved_next_day_night_setup_tstamp
+      next_state_check_tstamp = saved_next_state_check_tstamp
+      next_photo_tstamp = saved_next_photo_tstamp
+
+      log(INFO, "Reusing saved event timestamps")
+
+    else:
+      log(WARN, "Not reusing saved event timestamps")
+
+  except Exception as e:
+    log(WARN, "Could not load event timestamps from {}: {}".
+		format(event_timestamps_file, str(e)))
+
   tries = 0
 
   while True:
@@ -363,6 +447,19 @@ def main():
     try:
 
       now = time()
+
+      # Save the timestamps, in case the script stops but restarts soon enough
+      # afterward that we can reuse them
+      try:
+        with open(os.path.expanduser(event_timestamps_file), "w") as f:
+          j = {"next_day_night_setup_tstamp": next_day_night_setup_tstamp,
+		"next_state_check_tstamp": next_state_check_tstamp,
+		"next_photo_tstamp": next_photo_tstamp}
+          print(json.dumps(j, indent = 2), file = f)
+
+      except Exception as e:
+        log(WARN, "Could not save event timestamps in {}: {}".
+		format(event_timestamps_file, str(e)))
 
       # If the last command took more than one try to go through, redo the basic
       # setup of the camera because it has probably lost its marbles
@@ -418,7 +515,7 @@ def main():
           next_basic_setup_tstamp = now
 
         except Exception as e:
-          log(ERROR, e)
+          log(ERROR, str(e))
           next_reboot_tstamp = now
 
       # Should we do a basic setup of the camera?
@@ -627,6 +724,11 @@ def main():
 
         # Schedule the next state check
         next_state_check_tstamp += check_camera_state_every
+
+    except KeyboardInterrupt:
+
+      log(WARN, "Interrupted")
+      return -1
 
     except RuntimeError as e:
 
