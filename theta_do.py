@@ -338,7 +338,7 @@ def main():
 	)
 
   subparser_capture_mode = subparsers.add_parser(
-	  "capturemode",
+	  "mode",
 	  help = "Get or set the capture mode"
 	)
 
@@ -923,7 +923,7 @@ def main():
         prettyprint(rt.set_stitching_mode(args.mode))
 
     # Get or set the capture mode
-    elif args.command == "capturemode":
+    elif args.command == "mode":
       if args.mode is None:
         print(rt.get_capture_mode())
       else:
