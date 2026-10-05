@@ -374,6 +374,8 @@ def main():
   next_state_check_tstamp = NEVER
   next_photo_tstamp = NEVER
 
+  camera_set_for_daytime = None	# Current setup presumed unknown
+
   # Try to reload event timings from the save file, in case the script was
   # stopped and restarted, to keep the timing of the photos correct
   # Don't use timestamps that are too far in the past or in the future
