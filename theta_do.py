@@ -11,6 +11,7 @@ import sys
 import json
 import argparse
 import tempfile
+from datetime import datetime
 from thetaclass.theta import Theta, \
 				_default_live_preview_viewer_command
 
@@ -131,6 +132,29 @@ def theta_camera_names_completer(**kwargs):
 
 
 
+def argparse_iso_date_time_zone_or_now(value):
+  """Argparse type for a valid date / time with or without timezone in ISO 8601
+  format, or the word "now"
+  If the timezone is omitted, use the system's timezone
+  If value contains "now", use the system's date / time and timezone
+  """
+
+  if value.lower() == "now":
+    return datetime.now().astimezone()
+
+  try:
+    dtz = datetime.fromisoformat(value)
+  except:
+    raise argparse.ArgumentTypeError("{}: invalid ISO 8601 date / time / zone".
+					format(value))
+
+  if dtz.tzinfo is None:
+    return dtz.replace(tzinfo = datetime.now().astimezone().tzinfo)
+
+  return dtz.tzinfo
+
+
+
 def printable_live_preview_format(width, height, framerate):
   """Return a short description string of a live preview format
   """
@@ -243,6 +267,11 @@ def main():
   subparser_eventlog = subparsers.add_parser(
 	  "eventlog",
 	  help = "Retrieve the event log"
+	)
+
+  subparser_datetimezone = subparsers.add_parser(
+	  "datetimezone",
+	  help = "Get or set the date / time / timezone"
 	)
 
   subparser_powermode = subparsers.add_parser(
@@ -397,6 +426,16 @@ def main():
 	  "password",
 	  type = str,
 	  help = "Client-mode password to set"
+	)
+
+  subparser_datetimezone.add_argument(
+	  "iso",
+	  nargs = "?",
+	  type = argparse_iso_date_time_zone_or_now,
+	  default = None,
+	  help = 'Date / time / timzeone to set in ISO 8601 format, or "now". '
+			"If the timezone isn't specified, use the system's. "
+			"Get the current date / time / timezone if omitted"
 	)
 
   subparser_powermode.add_argument(
@@ -769,6 +808,13 @@ def main():
     elif args.command == "eventlog":
       for l in rt.get_event_log():
         print(l)
+
+    # Get or set the date / time / timezone
+    elif args.command == "datetimezone":
+      if args.iso is None:
+        print(rt.get_date_time_zone().isoformat())
+      else:
+        prettyprint(rt.set_date_time_zone(args.iso))
 
     # Get or set the power mode
     elif args.command == "power":

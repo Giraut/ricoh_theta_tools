@@ -21,7 +21,7 @@ import re
 import requests
 from requests.auth import HTTPDigestAuth
 from time import time, sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 import exiftool	# type: ignore
 import subprocess
 
@@ -791,6 +791,74 @@ class Theta:
 				connect_timeout = connect_timeout,
 				reconnect_tries = reconnect_tries,
 				read_timeout = read_timeout).text.splitlines()
+
+
+
+  def get_date_time_zone(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the camera's date / time and timezone
+    """
+
+    dtz = self._get_option("dateTimeZone",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+    # Check that the string returned by the camera is the right format
+    m = self.__datetime_tz_regex.match(dtz)
+    assert m is not None, \
+		"malformed response: date/time/zone string doesn't match the " \
+		"expected format: {}".format(dtz)
+
+    # Convwert it to ISO format
+    datetime_iso = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{}".\
+			format(int(m[1]), int(m[2]), int(m[3]),
+				int(m[4]), int(m[5]), int(m[6]),
+				m[7])
+
+    return datetime.fromisoformat(datetime_iso)
+
+
+
+  def set_date_time_zone(self,
+				date_time_zone,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Set the camera's date / time and timezone
+    If date_time_zone is set to None, get the system's date / time and timezone
+    """
+
+    if date_time_zone is None:
+      date_time_zone = datetime.now().astimezone()
+
+    assert isinstance(date_time_zone, datetime), \
+		"date_time_zone should be a datetime"
+
+    assert date_time_zone.tzinfo is not None, \
+		"date_time_zone.tzinfo is required"
+
+    # Extract the timezone's UTC offset in hours and minutes
+    utc_offset_mins = date_time_zone.utcoffset().total_seconds() // 60
+    utc_offset_sign = "-" if utc_offset_mins < 0 else "+"
+    utc_offset_hours, utc_offset_mins = divmod(abs(utc_offset_mins), 60)
+
+    # Convert the date / time and timezone into Ricoh Theta format
+    dtz = "{:04d}:{:02d}:{:02d} {:02d}:{:02d}:{:02d}{}{:02.0f}:{:02.0f}".\
+		format(date_time_zone.year,
+			date_time_zone.month,
+			date_time_zone.day,
+			date_time_zone.hour,
+			date_time_zone.minute,
+			date_time_zone.second,
+			utc_offset_sign, utc_offset_hours, utc_offset_mins)
+
+    return self._set_option("dateTimeZone", dtz,
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
 
 
 
