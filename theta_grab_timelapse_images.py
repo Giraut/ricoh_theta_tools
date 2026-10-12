@@ -29,7 +29,7 @@ except:
 
 
 ### Parameters
-take_photo_every = 30 #s
+take_photo_every = 15 #s
 check_camera_state_every = 300 #s
 run_camera_in_silent_powermode = False
 turn_off_camera_when_battery_below = 30 #%
@@ -154,11 +154,16 @@ def configure_camera_for_daytime_capture(rt):
   Return the number of tries
   """
 
+  log(INFO, "Nighttime camera setup: file format = JPEG, 11008x5504 ")
   log(INFO, "Daytime camera setup: exposure program = auto")
   log(INFO, "Daytime camera setup: filter = hdr")
   log(INFO, "Daytime camera setup: EV compensation = 0")
 
-  options = {"exposureProgram": 2,
+  options = {"fileFormat": {
+			"type": "jpeg",
+			"width": 11008,
+			"height": 5504},
+		"exposureProgram": 2,
 		"_filter": "off",
 		"exposureCompensation": 0}
 
@@ -174,14 +179,19 @@ def configure_camera_for_nighttime_capture(rt):
   Return the number of tries
   """
 
+  log(INFO, "Nighttime camera setup: file format = JPEG, 5504x2752 ")
   log(INFO, "Nighttime camera setup: exposure program = manual")
-  log(INFO, "Nighttime camera setup: shutter_speed = 10s")
-  log(INFO, "Nighttime camera setup: ISO sensitivity = 800")
+  log(INFO, "Nighttime camera setup: shutter_speed = 8s")
+  log(INFO, "Nighttime camera setup: ISO sensitivity = 1000")
   log(INFO, "Nighttime camera setup: EV compensation = 0")
 
-  options = {"exposureProgram": 1,
-		"shutterSpeed": 10,
-		"iso": 800,
+  options = {"fileFormat": {
+			"type": "jpeg",
+			"width": 5504,
+			"height": 2752},
+		"exposureProgram": 1,
+		"shutterSpeed": 8,
+		"iso": 1000,
 		"exposureCompensation": 0}
 
   _, tries = retry(rt, rt._set_options, options,
