@@ -59,3 +59,8 @@ Version 1.3.0 - 04/10/2026 - Added support to turn bluetooth on/off, stop the
 Version 1.3.1 - 05/10/2026 - Fix bug that crashed theta_grab_timelapse_images.py
                              when switching daytime / nighttime if the script
                              was restarted and reused saved event timestamps
+Version 1.4.0 - 12/10/2026 - Added support for getting and setting the camera's
+                             date / time / timezone
+                           - Renamed "capturemode" to "mode" in theta_do.py
+                           - Optimized nighttime capture parameters for a faster
+                             shooting pace in theta_grab_timelapse_images.py
