@@ -33,6 +33,9 @@ take_photo_every = 15 #s
 check_camera_state_every = 300 #s
 run_camera_in_silent_powermode = False
 turn_off_camera_when_battery_below = 30 #%
+pov_correction_yaw = 0 #deg
+pov_correction_pitch = 0 #deg
+pov_correction_roll = 0 #deg
 retries = 20
 wait_before_retry = 2 #s
 reconnect_tries = 5
@@ -132,6 +135,10 @@ def configure_camera_basic_setup(rt):
     log(INFO, "Basic camera setup: shutter volume = 0")
   log(INFO, "Basic camera setup: capture mode = image")
   log(INFO, "Basic camera setup: stitching mode = static")
+  log(INFO, "Basic camera setup: POV correction yaw, pitch roll = {}, {}, {}".
+		format(pov_correction_yaw,
+			pov_correction_pitch,
+			pov_correction_roll))
 
   if run_camera_in_silent_powermode:
     options = {"_cameraPower": "silentMode"}
@@ -140,9 +147,19 @@ def configure_camera_basic_setup(rt):
 		"_shutterVolume": 0}
   options = {**options,
 		**{"captureMode": "image",
-			"_imageStitching": "static"}}
+			"_imageStitching": "static",
+			"_topBottomCorrectionRotation": {
+				"yaw": pov_correction_yaw,
+				"pitch": pov_correction_pitch,
+				"roll": pov_correction_roll}}}
 
   _, tries = retry(rt, rt._set_options, options,
+			reconnect_tries = reconnect_tries)
+
+  # Setting the POV correction mode to Manual must be done after setting the
+  # capture mode, because the latter resets the POV correction to ApplyAuto
+  log(INFO, "Basic camera setup: POV correction = manual")
+  _, tries = retry(rt, rt.set_pov_correction_mode, "Manual",
 			reconnect_tries = reconnect_tries)
 
   return tries
@@ -154,20 +171,25 @@ def configure_camera_for_daytime_capture(rt):
   Return the number of tries
   """
 
-  log(INFO, "Nighttime camera setup: file format = JPEG, 11008x5504 ")
+  log(INFO, "Daytime camera setup: file format = JPEG, 5504x2752 ")
   log(INFO, "Daytime camera setup: exposure program = auto")
   log(INFO, "Daytime camera setup: filter = hdr")
   log(INFO, "Daytime camera setup: EV compensation = 0")
-
   options = {"fileFormat": {
 			"type": "jpeg",
-			"width": 11008,
-			"height": 5504},
+			"width": 5504,
+			"height": 2752},
 		"exposureProgram": 2,
 		"_filter": "off",
 		"exposureCompensation": 0}
 
   _, tries = retry(rt, rt._set_options, options,
+			reconnect_tries = reconnect_tries)
+
+  # Setting the POV correction mode to Manual must be done after setting the
+  # exposure program, because the latter resets the POV correction to ApplyAuto
+  log(INFO, "Daytime camera setup: POV correction = manual")
+  _, tries = retry(rt, rt.set_pov_correction_mode, "Manual",
 			reconnect_tries = reconnect_tries)
 
   return tries
@@ -195,6 +217,12 @@ def configure_camera_for_nighttime_capture(rt):
 		"exposureCompensation": 0}
 
   _, tries = retry(rt, rt._set_options, options,
+			reconnect_tries = reconnect_tries)
+
+  # Setting the POV correction mode to Manual must be done after setting the
+  # exposure program, because the latter resets the POV correction to ApplyAuto
+  log(INFO, "Nighttime camera setup: POV correction = manual")
+  _, tries = retry(rt, rt.set_pov_correction_mode, "Manual",
 			reconnect_tries = reconnect_tries)
 
   return tries
