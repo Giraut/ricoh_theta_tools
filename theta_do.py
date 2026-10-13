@@ -132,7 +132,7 @@ def theta_camera_names_completer(**kwargs):
 
 
 
-def argparse_iso_date_time_zone_or_now(value):
+def argparse_iso_date_time_zone_or_now_type(value):
   """Argparse type for a valid date / time with or without timezone in ISO 8601
   format, or the word "now"
   If the timezone is omitted, use the system's timezone
@@ -366,6 +366,16 @@ def main():
 	  help = "Get or set the stitching mode"
 	)
 
+  subparser_pov_correction_mode = subparsers.add_parser(
+	  "povmode",
+	  help = "Get or set the stitcher's POV correction mode"
+	)
+
+  subparser_pov_correction_yaw_pitch_roll = subparsers.add_parser(
+	  "pov",
+	  help = "Get or set the stitcher's POV correction yaw, pitch and roll"
+	)
+
   subparser_capture_mode = subparsers.add_parser(
 	  "mode",
 	  help = "Get or set the capture mode"
@@ -431,7 +441,7 @@ def main():
   subparser_datetimezone.add_argument(
 	  "iso",
 	  nargs = "?",
-	  type = argparse_iso_date_time_zone_or_now,
+	  type = argparse_iso_date_time_zone_or_now_type,
 	  default = None,
 	  help = 'Date / time / timzeone to set in ISO 8601 format, or "now". '
 			"If the timezone isn't specified, use the system's. "
@@ -612,6 +622,37 @@ def main():
 	  help = 'Stitching mode to set in image capture mode. Get the current '
 			'stitching mode if omitted (note: reverts to "auto" '
 			'when switching to video capture mode)'
+	)
+
+  subparser_pov_correction_mode.add_argument(
+	  "mode",
+	  nargs = "?",
+	  type = str,
+	  choices = Theta._valid_pov_corr_modes,
+	  default = None,
+	  help = "Stitcher's POV correction mode to set. Get the current "
+			"stitcher's POV correction mode if omitted"
+	)
+
+  subparser_pov_correction_yaw_pitch_roll.add_argument(
+	  "yaw",
+	  nargs = "?",
+	  type = float,
+	  help = "Stitcher's POV correction yaw angle"
+	)
+
+  subparser_pov_correction_yaw_pitch_roll.add_argument(
+	  "pitch",
+	  nargs = "?",
+	  type = float,
+	  help = "Stitcher's POV correction pitch angle"
+	)
+
+  subparser_pov_correction_yaw_pitch_roll.add_argument(
+	  "roll",
+	  nargs = "?",
+	  type = float,
+	  help = "Stitcher's POV correction roll angle"
 	)
 
   subparser_capture_mode.add_argument(
@@ -967,6 +1008,22 @@ def main():
         print(rt.get_stitching_mode())
       else:
         prettyprint(rt.set_stitching_mode(args.mode))
+
+    # Get or set the stitcher's POV correction mode
+    elif args.command == "povmode":
+      if args.mode is None:
+        print(rt.get_pov_correction_mode())
+      else:
+        prettyprint(rt.set_pov_correction_mode(args.mode))
+
+    # Get or set the stitcher's POV correction yaw, pitch and roll
+    elif args.command == "pov":
+      if args.yaw is None and args.pitch is None and args.roll is None:
+        print(rt.get_pov_yaw_pitch_roll())
+      elif args.yaw is None or args.pitch is None or args.roll is None:
+        argparser.error("yaw, pitch and roll angles must be supplied")
+      else:
+        prettyprint(rt.set_pov_yaw_pitch_roll(args.yaw, args.pitch, args.roll))
 
     # Get or set the capture mode
     elif args.command == "mode":

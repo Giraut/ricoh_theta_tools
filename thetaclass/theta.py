@@ -254,6 +254,14 @@ class Theta:
 				"dynamicLoad",
 				"none")
 
+  _valid_pov_corr_modes = ("Apply",
+				"ApplyAuto",
+				"ApplySemiAuto",
+				"ApplySave",
+				"ApplyLoad",
+				"Disapply",
+				"Manual")
+
 
 
   ### Methods
@@ -1752,6 +1760,101 @@ class Theta:
 					).rsplit(", ", 1)))
 
     return self._set_option("_imageStitching", mode,
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
+  def get_pov_correction_mode(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the camera's stitcher's POV correction (aka "top/bottom correction")
+    mode - one of "Apply", "ApplyAuto", "ApplySemiAuto", "ApplySave",
+    "ApplyLoad", "Disapply" or "Manual"
+    """
+
+    return self._get_option("_topBottomCorrection",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
+  def set_pov_correction_mode(self,
+				mode,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Set the camera's stitcher's POV correction (aka "top/bottom correction")
+    mode - one of "Apply", "ApplyAuto", "ApplySemiAuto", "ApplySave",
+    "ApplyLoad", "Disapply" or "Manual"
+    """
+
+    # Sanity-check the arguments
+    assert mode in self._valid_pov_corr_modes, \
+		"mode should be {}".\
+			format(" or ".
+				join(", ".join('"{}"'.format(f) \
+					for f in self._valid_stitching_modes
+					).rsplit(", ", 1)))
+
+    return self._set_option("_topBottomCorrection", mode,
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+
+
+  def get_pov_yaw_pitch_roll(self,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Get the camera's stitcher's POV correction yaw, pitch and roll values
+    (only applied in manual POV correction mode)
+    """
+
+    json_resp = self._get_option("_topBottomCorrectionRotation",
+				connect_timeout = connect_timeout,
+				reconnect_tries = reconnect_tries,
+				read_timeout = read_timeout)
+
+    for k in ("yaw", "pitch", "roll"):
+      assert k in json_resp, \
+		"malformed JSON response: missing " + k
+      json_resp[k] = float(json_resp[k])
+
+    return json_resp
+
+
+
+  def set_pov_yaw_pitch_roll(self,
+				yaw,
+				pitch,
+				roll,
+				connect_timeout = _default_connect_timeout,
+				reconnect_tries = _default_reconnect_tries,
+				read_timeout = _default_request_timeout):
+    """Set the camera's stitcher's POV correction yaw, pitch and roll values
+    (only applied in manual POV correction mode)
+    """
+
+    assert type(yaw) in (int, float), \
+		"yaw required and should be an int or a float"
+    assert type(pitch) in (int, float), \
+		"pitch required and should be an int or a float"
+    assert type(roll) in (int, float), \
+		"roll required and should be an int or a float"
+    assert -180 <= yaw <= 180, \
+		"yaw should be >= -180 and <= 180"
+    assert -180 <= pitch <= 180, \
+		"pitch should be >= -180 and <= 180"
+    assert -180 <= roll <= 180, \
+		"roll should be >= -180 and <= 180"
+
+    return self._set_option("_topBottomCorrectionRotation",
+				{"yaw": yaw, "pitch": pitch, "roll": roll},
 				connect_timeout = connect_timeout,
 				reconnect_tries = reconnect_tries,
 				read_timeout = read_timeout)
