@@ -64,3 +64,12 @@ Version 1.4.0 - 12/10/2026 - Added support for getting and setting the camera's
                            - Renamed "capturemode" to "mode" in theta_do.py
                            - Optimized nighttime capture parameters for a faster
                              shooting pace in theta_grab_timelapse_images.py
+Version 1.4.1 - 17/10/2026 - Added support for getting / setting the POV
+                             compensation and yaw / pitch / roll angles
+                           - Downgraded the daytime capture resolution to
+                             5504x2752 in theta_grab_timelapse_images.py to
+                             improve the cameras's stability when when shooting
+                             very long timelapses
+                           - In theta_grab_timelapse_images.py, disabled POV
+                             compensation entirely to prevent micro-movements
+                             in timelapses due to noise in the camera's sensors
