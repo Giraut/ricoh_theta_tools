@@ -273,6 +273,12 @@ def retry(rt, fct, *args, **kwargs):
       if e.startswith("403 Client Error: Forbidden"):
         raise RuntimeError("THETA:{}".format(e))
 
+      # If we get an error 503, the camera's HTTP server has probably deadlocked
+      # or gone unstable, so only allow 2 retries before letting camera reboots faster
+      if e.startswith("503 Server Error: serviceUnavailable") and \
+		t < retries - 1:
+        t = retries - 1
+
       if t > retries:
         raise RuntimeError("THETA:{}".format(e))
 
