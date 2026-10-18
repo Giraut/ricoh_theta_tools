@@ -34,7 +34,7 @@ check_camera_state_every = 300 #s
 run_camera_in_silent_powermode = False
 turn_off_camera_when_battery_below = 30 #%
 pov_correction_yaw = 0 #deg
-pov_correction_pitch = 0 #deg
+pov_correction_pitch = 65.09 #deg
 pov_correction_roll = 0 #deg
 retries = 20
 wait_before_retry = 2 #s
@@ -697,6 +697,7 @@ def main():
 						" (late by {:0.1f} s)".
 							format(-wait_for)))
         r, tries  = retry(rt, rt.take_photo,
+				wait_photo_taken = take_photo_every + 5,
 				reconnect_tries = reconnect_tries)
 
         file_url = r["results"]["fileUrl"]
