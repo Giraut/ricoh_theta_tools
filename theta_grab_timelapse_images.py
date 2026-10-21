@@ -134,6 +134,7 @@ def configure_camera_basic_setup(rt):
     log(INFO, "Basic camera setup: UI = locked")
     log(INFO, "Basic camera setup: shutter volume = 0")
   log(INFO, "Basic camera setup: capture mode = image")
+  log(INFO, "Basic camera setup: exposure delay = 0")
   log(INFO, "Basic camera setup: stitching mode = static")
   log(INFO, "Basic camera setup: POV correction yaw, pitch roll = {}, {}, {}".
 		format(pov_correction_yaw,
@@ -147,6 +148,7 @@ def configure_camera_basic_setup(rt):
 		"_shutterVolume": 0}
   options = {**options,
 		**{"captureMode": "image",
+			"exposureDelay": 0,
 			"_imageStitching": "static",
 			"_topBottomCorrectionRotation": {
 				"yaw": pov_correction_yaw,
