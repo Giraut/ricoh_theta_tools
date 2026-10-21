@@ -721,6 +721,14 @@ def main():
 	)
 
   subparser_view.add_argument(
+	  "-d", "--download",
+	  action = "store_true",
+	  help = "When viewing a Theta URL, download the file permanently "
+			"rather than saving it in a temporary file that gets "
+			"deleted when the viewer / player is closed"
+	)
+
+  subparser_view.add_argument(
 	  "-i", "--image-viewer-command",
 	  type = str,
 	  default = default_360_image_viewer_command,
@@ -1088,6 +1096,7 @@ def main():
       print("done")
 
     # View a file in the camera or a local file
+    # Download the file permanently if requested
     elif args.command == "view":
 
       if args.file == "last":
@@ -1097,23 +1106,32 @@ def main():
       assert ext in image_file_extensions or ext in video_file_extensions, \
 		"unknow file type"
 
-      if re.match(Theta._file_url_pattern, args.file):
+      m = re.match(Theta._file_url_pattern, args.file)
+      if m:
 
-        temp_fd, temp_fpath = tempfile.mkstemp(suffix = "." + ext)
-        os.close(temp_fd)
+        if args.download:
+          fpath = m[4]
+          save_dir = "."
+          save_fname = fpath
+
+        else:
+          temp_fd, fpath = tempfile.mkstemp(suffix = "." + ext)
+          os.close(temp_fd)
+          save_dir = os.path.dirname(fpath)
+          save_fname = os.path.basename(fpath)
 
         try:
-          rt.download_file(args.file,
-				save_dir = os.path.dirname(temp_fpath),
-				save_fname = os.path.basename(temp_fpath))
+          rt.download_file(args.file, save_dir = save_dir,
+					save_fname = save_fname)
 
           if ext in image_file_extensions:
-            os.system(args.image_viewer_command.format(temp_fpath))
+            os.system(args.image_viewer_command.format(fpath))
           else:
-            os.system(args.video_player_command.format(temp_fpath))
+            os.system(args.video_player_command.format(fpath))
 
         finally:
-          os.unlink(temp_fpath)
+          if not args.download:
+            os.unlink(fpath)
 
       else:
         if ext in image_file_extensions:
