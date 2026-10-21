@@ -73,3 +73,7 @@ Version 1.4.1 - 17/10/2026 - Added support for getting / setting the POV
                            - In theta_grab_timelapse_images.py, disabled POV
                              compensation entirely to prevent micro-movements
                              in timelapses due to noise in the camera's sensors
+Version 1.4.2 - 21/10/2026 - Corrected the timing of camera state check events
+                             in theta_grab_timelapse_images.py
+                           - Added -d / --download switch to the view command in
+                             theta_do.py to download a Theta URL permanently
