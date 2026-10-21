@@ -535,12 +535,12 @@ def main():
         # If the next daytime / nighttime reconfiguration attempt is scheduled
         # too close before a photo, postpone it so the photo takes precedence
         # and happens exactly on time
-        if 0 <= next_photo_tstamp - next_day_night_setup_tstamp <= 5:
+        if 0 <= next_photo_tstamp - next_day_night_setup_tstamp <= 2:
           next_day_night_setup_tstamp += POSTPONED
 
         # If the next state check is scheduled too close before a photo, cancel
         # it so the photo takes precedence and happens exactly on time
-        if 0 <= next_photo_tstamp - next_state_check_tstamp <= 5:
+        if 0 <= next_photo_tstamp - next_state_check_tstamp <= 2:
           next_state_check_tstamp += POSTPONED
 
       # Determine which event timeout is coming up next
@@ -732,7 +732,7 @@ def main():
         # If checking the state of the camera  has been postponed because it
         # was too close before a photo event, let it go through at the next pass
         if next_state_check_tstamp > POSTPONED:
-          next_day_night_setup_tstamp -= POSTPONED
+          next_state_check_tstamp -= POSTPONED
 
         # If checking the state of the camera hasn't been started yet, schedule
         # the next check
