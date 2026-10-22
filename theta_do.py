@@ -151,7 +151,7 @@ def argparse_iso_date_time_zone_or_now_type(value):
   if dtz.tzinfo is None:
     return dtz.replace(tzinfo = datetime.now().astimezone().tzinfo)
 
-  return dtz.tzinfo
+  return dtz
 
 
 
