@@ -78,3 +78,7 @@ Version 1.4.2 - 21/10/2026 - Corrected the timing of camera state check events
                            - Added -d / --download switch to the view command in
                              theta_do.py to download a Theta URL permanently
 Version 1.4.3 - 23/10/2026 - Correctly set the date / time / zone
+Version 1.5.0 - 24/10/2026 - Added compile_theta_images.py program and sample
+                             shell script to process Theta photos shot at
+                             regular intervals and render them into timelapse
+                             videos or combined images
