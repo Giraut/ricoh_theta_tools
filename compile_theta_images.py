@@ -305,8 +305,8 @@ def argparse_delogo_zone_type(value):
 
 
 
-def set_file_xmp_tags(fpath):
-  """Set 360-related XMP tags in an image or video
+def mark_file_spherical(fpath):
+  """Mark an image or video file as spherical
   """
 
   # Exiftool can't modify webm video files: use mkvpropedit instead
@@ -1283,6 +1283,8 @@ def main():
 				"-b:a", "128k",
 				"-start_number", "0",
 				"-hls_time", "10",
+				"-hls_segment_type", "fmp4",
+				"-hls_playlist_type", "vod",
 				"-hls_list_size", "0",
 				"-async", "1",
 				"-f", "hls"]
@@ -1331,6 +1333,36 @@ def main():
     except Exception as e:
       print("ffmpeg command failed: {}".format(e))
       return -1
+
+    # Mark the video as spherical
+    if ext != "m3u8":
+      mark_file_spherical(outfile)
+
+    # If the video is an m3u8, since it's encoded as fragmented MP4, it has a
+    # init.mp4 header file that we need to set the spherical tags into
+    #
+    # Unfortunately, it doesn't have a boundary data media block (mdat box),
+    # which prevents exiftool from working
+    #
+    # To side-step this, tack an empty mdat box to the end of the file, run
+    # exiftool, then peel off the empty mdat box
+    else:
+
+      hdr_file = os.path.join(outfile_dir, "init.mp4")
+      empty_mdat_box = b"\x00\x00\x00\x08mdat"
+
+      # Tack on empty mdat box
+      with open(hdr_file, "ab") as f:
+        f.write(empty_mdat_box)
+
+      # Mark the header as spherical
+      mark_file_spherical(hdr_file)
+
+      # Peel off the empty mdat box
+      with open(hdr_file, "r+b") as f:
+        f.seek(0, 2)  # seek the end of the file
+        hdr_size = f.tell()
+        f.truncate(hdr_size - len(empty_mdat_box))
 
   # Should we create an average file?
   elif args.command == "average":
@@ -1387,6 +1419,9 @@ def main():
       print("ffmpeg command failed: {}".format(e))
       return -1
 
+    # Mark the image as spherical
+    mark_file_spherical(outfile)
+
   # Should we create an combined file?
   elif args.command == "combine":
 
@@ -1441,9 +1476,8 @@ def main():
       print("ffmpeg command failed: {}".format(e))
       return -1
 
-  # Set the file's XMP tags if it supports it
-  if ext != "m3u8":
-    set_file_xmp_tags(outfile)
+    # Mark the image as spherical
+    mark_file_spherical(outfile)
 
   return 0
 
