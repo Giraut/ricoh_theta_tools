@@ -9,6 +9,11 @@ image_exif_info_cache_file = "~/.ricoh_theta_image_exif_info_cache.json"
 acceptable_image_extensions = ["jpg"]
 is_nighttime_image = lambda exposuretime, iso: exposuretime > 1 and iso > 400
 
+# Helper programs
+ffmpeg_executable = "ffmpeg"
+exiftool_executable = "exiftool"
+mkvpropedit_executable = "mkvpropedit"
+
 # Default timelapse video encoding options
 default_timelapse_video_width = 4096 #px
 default_timelapse_video_height = 2048 #px
@@ -93,7 +98,6 @@ import sys
 import json
 from collections import OrderedDict
 import argparse
-import tempfile
 import subprocess
 from datetime import datetime, timezone, timedelta
 import exiftool	# type: ignore
@@ -308,70 +312,13 @@ def set_file_xmp_tags(fpath):
   # Exiftool can't modify webm video files: use mkvpropedit instead
   if os.path.splitext(fpath)[1][1:].lower() == "webm":
 
-    # Create a temporary file for the XML file mkvpropedit needs
-    temp_fd, temp_fpath = tempfile.mkstemp(suffix = ".xml")
-
     try:
 
-      with os.fdopen(temp_fd, "w") as f:
-        print("""<?xml version="1.0" encoding="UTF-8"?>
-		<!DOCTYPE Tags SYSTEM "matroskatags.dtd">
-		<Tags>
-		  <Tag>
-		    <Targets>
-		      <TargetTypeValue>50</TargetTypeValue>
-		    </Targets>
-		    <Simple>
-		      <Name>GPano:UsePanoramaViewer</Name>
-		      <String>True</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GPano:ProjectionType</Name>
-		      <String>equirectangular</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GPano:PoseHeadingDegrees</Name>
-		      <String>0.0</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GPano:PosePitchDegrees</Name>
-		      <String>0.0</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GPano:PoseRollDegrees</Name>
-		      <String>0.0</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GPano:InitialViewHeadingDegrees</Name>
-		      <String>0.0</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GPano:InitialViewPitchDegrees</Name>
-		      <String>0.0</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GPano:InitialViewRollDegrees</Name>
-		      <String>0.0</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GSpherical:Spherical</Name>
-		      <String>True</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GSpherical:Stitched</Name>
-		      <String>True</String>
-		    </Simple>
-		    <Simple>
-		      <Name>GSpherical:ProjectionType</Name>
-		      <String>equirectangular</String>
-		    </Simple>
-		  </Tag>
-		</Tags>""".replace("\t", ""), file = f)
-
         # Create the mkvpropedit command
-      mkvpropedit_cmd = ["mkvpropedit",
+      mkvpropedit_cmd = [mkvpropedit_executable,
 				fpath,
-				"--tags", "track:v1:{}".format(temp_fpath)]
+				"--edit", "track:v1",
+				"--set", "projection-type=1"]
 
       # Run the mkvpropedit command
       for i, arg in enumerate(mkvpropedit_cmd):
@@ -390,14 +337,11 @@ def set_file_xmp_tags(fpath):
       print("mkvpropedit command failed: {}".format(e))
       return -1
 
-    finally:
-      os.unlink(temp_fpath)
-
   # Run exiftool on files other than webm
   else:
 
     # Create the exiftool command
-    exiftool_cmd = ["exiftool",
+    exiftool_cmd = [exiftool_executable,
 			"-overwrite_original",
 			"-XMP-GPano:UsePanoramaViewer=true",
 			"-XMP-GPano:ProjectionType=equirectangular",
@@ -1353,7 +1297,7 @@ def main():
     try:
 
       # Build the ffmpeg command
-      ffmpeg_cmd = ["ffmpeg"] + \
+      ffmpeg_cmd = [ffmpeg_executable] + \
 			ffmpeg_verbosity_args + [
 			"-y",
 			"-protocol_whitelist", "pipe,file",
@@ -1409,7 +1353,7 @@ def main():
     try:
 
       # Build the ffmpeg command
-      ffmpeg_cmd = ["ffmpeg"] + \
+      ffmpeg_cmd = [ffmpeg_executable] + \
 			ffmpeg_verbosity_args + [
 			"-y",
 			"-protocol_whitelist", "pipe,file",
@@ -1463,7 +1407,7 @@ def main():
     try:
 
       # Build the ffmpeg command
-      ffmpeg_cmd = ["ffmpeg"] + \
+      ffmpeg_cmd = [ffmpeg_executable] + \
 			ffmpeg_verbosity_args + [
 			"-y",
 			"-protocol_whitelist", "pipe,file",
