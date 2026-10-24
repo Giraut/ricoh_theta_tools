@@ -1392,7 +1392,8 @@ def main():
       concat_list += "file 'file:{}'\n".format(fpath)
 
     # Set the frame mixing arguments
-    video_filters += "tmix=" \
+    video_filters += "format=yuv420p," \
+			"tmix=" \
 			"frames={}:" \
 			"weights=1".\
 			format(nb_images)
