@@ -942,9 +942,15 @@ def main():
 
   cached_imgs_info = {}
 
-  # Load the EXIF info cache JSON file
-  with open(_image_exif_info_cache_file, "r") as f:
-    j =json.load(f)
+  # Try to load the EXIF info cache JSON file
+  j = {}
+  if os.path.isfile(_image_exif_info_cache_file):
+    try:
+      with open(_image_exif_info_cache_file, "r") as f:
+        j =json.load(f)
+    except Exception as e:
+      print("Error: could not load EXIF info cache file: {}".format(e))
+      return -1
 
   # If the files still exist, add the corresponding JSON entries to the cache
   # Drop them otherwise
@@ -954,26 +960,39 @@ def main():
 
   imgs_info = {}
 
-  # Get information on the source images
-  # Analyze them if they're not in the cache
-  for name in sorted(os.listdir(args.srcdir)):
-    if os.path.splitext(name)[1][1:].lower() in acceptable_image_extensions:
+  try:
 
-      fpath = os.path.abspath(os.path.join(args.srcdir, name))
+    # Get information on the source images
+    # Analyze them if they're not in the cache
+    for name in sorted(os.listdir(args.srcdir)):
+      if os.path.splitext(name)[1][1:].lower() in acceptable_image_extensions:
 
-      if fpath not in cached_imgs_info:
-        print(name, end = "")
-        try:
-          cached_imgs_info[fpath] = ImageInfo(fpath)
-          print()
-        except:
-          cached_imgs_info[fpath] = ImageInfo()
-          print(" (analysis failed - ignored)")
+        fpath = os.path.abspath(os.path.join(args.srcdir, name))
 
-      # If the file was analyzed properly, add it to the list of files we need
-      # to process
-      if cached_imgs_info[fpath].filename is not None:
-        imgs_info[fpath] = cached_imgs_info[fpath]
+        if fpath not in cached_imgs_info:
+
+          print(name, end = "")
+
+          try:
+            cached_imgs_info[fpath] = ImageInfo(fpath)
+            print()
+
+          except KeyboardInterrupt:
+            raise
+
+          except:
+            cached_imgs_info[fpath] = ImageInfo()
+            print(" (analysis failed - ignored)")
+
+        # If the file was analyzed properly, add it to the list of files we need
+        # to process
+        if cached_imgs_info[fpath].filename is not None:
+          imgs_info[fpath] = cached_imgs_info[fpath]
+
+  except KeyboardInterrupt:
+    print()
+    print("Interrupted")
+    return -1
 
   # Sort the cache by date
   cached_imgs_info = OrderedDict(sorted(cached_imgs_info.items(),
