@@ -87,25 +87,38 @@ You can list the commands with `theta_do.py -h`:
 ```shell
 $ ./theta_do.py  -h
 usage: theta_do.py [-h] [-c CAMERA]
-                   {info,state,password,eventlog,powermode,powersaving,reboot,ui,livepreview,fileformat,filter,program,ev,stitching,capturemode,delay,capture,takephoto,storage,list,last,delete,metadata,download,view} ...
+                   {info,state,password,eventlog,datetimezone,power,powersaving,bluetooth,volume,wlanpassword,wlanantenna,gps,reboot,ui,previewformat,preview,fileformat,filter,program,speed,iso,ev,stitching,povmode,pov,mode,delay,capture,takephoto,storage,list,last,delete,metadata,download,view} ...
 
 positional arguments:
-  {info,state,password,eventlog,powermode,powersaving,reboot,ui,livepreview,fileformat,filter,program,ev,stitching,capturemode,delay,capture,takephoto,storage,list,last,delete,metadata,download,view}
+  {info,state,password,eventlog,datetimezone,power,powersaving,bluetooth,volume,wlanpassword,wlanantenna,gps,reboot,ui,previewformat,preview,fileformat,filter,program,speed,iso,ev,stitching,povmode,pov,mode,delay,capture,takephoto,storage,list,last,delete,metadata,download,view}
     info                Query camera information
     state               Query the state of the camera
     password            Set the client-mode password when connected in AP mode
     eventlog            Retrieve the event log
-    powermode           Get or set the power mode
-    powersaving         Get or set power saving
+    datetimezone        Get or set the date / time / timezone
+    power               Get or set the power mode
+    powersaving         Enable ot disable power saving
+    bluetooth           Enable or disable power saving
+    volume              Get or set the shutter volume
+    wlanpassword        Set the WLAN password when connected in AP mode
+    wlanantenna         Get or set the WLAN antenna config when connected in
+                        AP mode
+    gps                 Get or set GPS tag recording
     reboot              Reboot the camera
     ui                  Lock or unlock the UI
-    livepreview         View the live preview MJPEG stream
+    previewformat       Get or set the live preview MJPEG stream format
+    preview             View the live preview MJPEG stream
     fileformat          list, get or set the file format
     filter              Get or set the filter
     program             Get or set the exposure program
+    speed               Get or set the shutter speed
+    iso                 Get or set the ISO sensitivity
     ev                  Get or set the exposure compensation
     stitching           Get or set the stitching mode
-    capturemode         Get or set the capture mode
+    povmode             Get or set the stitcher's POV correction mode
+    pov                 Get or set the stitcher's POV correction yaw, pitch
+                        and roll
+    mode                Get or set the capture mode
     delay               Get or set the exposure delay
     capture             Start or stop video capture
     takephoto           Take a photo
@@ -120,8 +133,12 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   -c, --camera CAMERA   Name of the camera to use, declared in
-                        ~/.ricoh_theta_creds.json. If omitted, use name saved
-                        in ~/.current_ricoh_theta.json
+                        ~/.ricoh_theta_creds.json, or "ap" to access the
+                        camera in direct mode at 192.168.1.1 with no
+                        credentials ("ap" may be redefined in
+                        ~/.ricoh_theta_creds.json). If omitted, use the name
+                        saved in ~/.current_ricoh_theta.json or default to
+                        "ap" for direct-mode commands
 ```
 
 To view the arguments required by a particular command, do ```theta_do.py <command> -h```. E.g.:
@@ -147,8 +164,6 @@ Remaining: 199.24 G
 But you don't need to use `-c` afterward: the utility saves the name of the camera for later user.
 
 If you have more than one camera and you want to change camera, use `-c` again.
-
-
 
 ### External helper programs
 
