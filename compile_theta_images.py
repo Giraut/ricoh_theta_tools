@@ -220,29 +220,108 @@ class ImageInfo:
 
 
 ### Routines
-def argparse_iso_date_time_zone_or_named_moment_type(value):
-  """Argparse type for a valid date / time with or without timezone in ISO 8601
-  format, or the word "now"
+def argparse_moment_specifier_type(value):
+  """Argparse type for a valid moment specifier, which may be:
 
-  If the timezone is omitted, use the system's timezone
+  - A date / time with or without timezone in ISO 8601. If the timezone is
+    omitted, use the system's timezone
 
-  The value may contain "beginning", "end", "dawn[0-9]+" or "dusk[0-9]+"
-  immediately followed by a time offset in days, hours, minutes or seconds.
-  E.g.: start+1d, end-30s, dusk1+1h, dawn2-30m
+  - An offset with an optional + or - prefix for a relative offset,
+    a float followed by h, m or s (time offset) or an int (image number offset)
+    e.g.:
+
+    +1d, -2.5h, 5m, +100
+
+    If the offset is relative, it is relative to the previously mentioned
+    moment (e.g. "+5m" to specify the moment of the last image relative to the
+    the moment of the first image).
+
+    If the offset if absolute, it is assumed to be relative to first - i.e. the
+    first image in the set.
+
+  - An optional named moment which may be "first" (time of the first image),
+    "last" (time of the last image), "dusk<no>" or "dawn<no>" (now being the
+    number of the dusk or dawn, e.g.:
+
+    "dusk1", "dawn2"
+
+    followed by an optional relative offset as described above, e.g.:
+
+    first+10m, dusk1+100, dawn2-1
   """
 
-  m = re.match(r"^(beginning|end|dawn[0-9]+|dusk[0-9]+)" \
-		r"(([+-][0-9\.]+)([dhms]))?$", value, re.I)
+  if not value:
+      raise argparse.ArgumentTypeError("empty moment specifier")
+
+  m = re.match(r"^(first|last|dawn[0-9]+|dusk[0-9]+)?" \
+		"([+-])?"\
+		r"([0-9\.]+)?"
+		"([dhms])?$", value, re.I)
 
   if m:
-    named_moment = m[1]
-    if m[3] is not None and m[4] is not None:
-      offset_seconds = float(m[3]) * \
-			{"s": 1, "m": 60, "h": 3600, "d": 86400}[m[4].lower()]
-    else:
-      offset_seconds = 0
 
-    return (named_moment.lower(), offset_seconds)
+    # Get the optional named moment
+    has_named_moment = m[1] is not None
+    named_moment = m[1].lower() if has_named_moment else ""
+
+    # Get the optional relative (+ or -) modifier
+    offset_sign = -1 if m[2] == "-" else +1
+    offset_is_relative = m[2] is not None
+
+    # Get the optional offset absolute value
+    if m[3] is None:
+      has_offset = False
+    else:
+      has_offset = True
+      try:
+        offset = int(m[3])
+        offset_is_int = True
+      except:
+        try:
+          offset = float(m[3])
+          offset_is_int = False
+        except:
+          raise argparse.ArgumentTypeError("{}: invalid offset".format(m3))
+
+    # Determine the type of offset (d, h, m or s for a time offset, "" for an
+    # image number offset) and the correct multiplier for the type
+    if m[4] is None:
+      is_time_offset = False
+      offset_multiplier = 1
+    else:
+      is_time_offset = True
+      offset_multiplier = {"d": 86400,
+				"h": 3600,
+				"m": 60,
+				"s": 1}[m[4].lower()]
+
+    # Validate the overall syntax
+    if has_named_moment and has_offset and not offset_is_relative:
+      raise argparse.ArgumentTypeError("{}: offset after named moment must be "
+					"relative (+ or -)".format(m[0]))
+
+    if is_time_offset and not has_offset:
+      raise argparse.ArgumentTypeError("{}: time offset value required".
+					format(m[0]))
+
+    if has_offset and not is_time_offset and not offset_is_int:
+      raise argparse.ArgumentTypeError("{}: image number offset {} must be "
+					"an integer".format(m[0], m[3]))
+
+    # Normalize the returned values
+    if not has_offset:
+      time_offset = 0
+      image_offset = 0
+
+    else:
+      offset *= offset_sign * offset_multiplier
+      time_offset = offset if is_time_offset else 0
+      image_offset = offset if not is_time_offset else 0
+
+    if has_offset and not offset_is_relative:
+      named_moment = "first"
+
+    return (named_moment, time_offset, image_offset)
 
   else:
     named_moment = None
@@ -251,8 +330,10 @@ def argparse_iso_date_time_zone_or_named_moment_type(value):
     try:
       dtz = datetime.fromisoformat(value)
     except:
-      raise argparse.ArgumentTypeError("{}: invalid ISO 8601 date / time / "
-					"zone or named moment".format(value))
+      raise argparse.ArgumentTypeError("{}: invalid moment specifier - must be "
+					"ISO 8601 date / time / zone or "
+					"[first|last|dawn#|dusk#][+-]"
+					"[offset][dhms]".format(value))
 
     if dtz.tzinfo is None:
       return dtz.replace(tzinfo = datetime.now().astimezone().tzinfo)
@@ -428,18 +509,24 @@ def main():
 
     sp.add_argument(
 	  "beginning",
-	  type = argparse_iso_date_time_zone_or_named_moment_type,
-	  help = "Beginning time in ISO format or named moment [+-offset]. "
-			"E.g. 2026-09-24 18:38:20+03:00, beginning, dusk1+1h, "
-			"dawn2-30m, end-10s"
+	  type = argparse_moment_specifier_type,
+	  help = "Beginning time in ISO format or [first|last|dawn#|dusk#]"
+			"[+-][offset][dhms] (the offset being in number of "
+			"images if neither d, h, m nor s is specified) - e.g. "
+			"2026-09-24 18:38:20+03:00, first, dusk1+1h, "
+			"dawn2-30m, last-10s, first+150, +30m, 1000, +1..."
 	)
 
     sp.add_argument(
 	  "end",
-	  type = argparse_iso_date_time_zone_or_named_moment_type,
-	  help = "End time in ISO format or named moment [+-offset]. "
-			"E.g. 2026-09-24 18:38:20+03:00, beginning, dusk1+1h, "
-			"dawn2-30m, end-10s"
+	  type = argparse_moment_specifier_type,
+	  help = "End time in ISO format or [first|last|dawn#|dusk#]"
+			"[+-][offset][dhms] (the offset being in number of "
+			"images if neither d, h, m nor s is specified), "
+			"and the offset being relative to the first "
+			"image if no named moment is specified - e.g. "
+			"2026-09-24 18:38:20+03:00, first, dusk1+1h, "
+			"dawn2-30m, last-10s, first+150, +30m, 1000, +1..."
 	)
 
     sp.add_argument(
@@ -1026,8 +1113,8 @@ def main():
   print()
 
   # Find special named moments: dawn / dusk transition times, midnights, noons
-  # and beginning / end times
-  named_moments = {}
+  # and first / last image times
+  named_moment_datetimes = {}
   dusks = 1
   dawns = 1
 
@@ -1039,28 +1126,28 @@ def main():
       is_nighttime_image_prev = v.is_nighttime_image
       datetime_prev = v.datetime
 
-      print("Beginning: {}: {}".format(v.datetime, k))
-      named_moments["beginning"] = v.datetime
+      print("first: {}: {}".format(v.datetime, k))
+      named_moment_datetimes["first"] = v.datetime
 
       first_image = False
       continue
 
     if not is_nighttime_image_prev and v.is_nighttime_image:
-      named_moments["dusk{}".format(dusks)] = v.datetime
-      print("    dusk{}: {}: {}".
+      named_moment_datetimes["dusk{}".format(dusks)] = v.datetime
+      print("dusk{}: {}: {}".
 		format(dusks, v.datetime.isoformat(sep = " "), k))
       dusks += 1
 
     elif is_nighttime_image_prev and not v.is_nighttime_image:
-      named_moments["dawn{}".format(dawns)] = v.datetime
-      print("    dawn{}: {}: {}".
+      named_moment_datetimes["dawn{}".format(dawns)] = v.datetime
+      print("dawn{}: {}: {}".
 		format(dawns, v.datetime.isoformat(sep = " "), k))
       dawns += 1
 
     is_nighttime_image_prev = v.is_nighttime_image
 
-  print("      End: {}: {}".format(v.datetime, k))
-  named_moments["end"] = v.datetime
+  print(" last: {}: {}".format(v.datetime, k))
+  named_moment_datetimes["last"] = v.datetime
 
   # If we only analyze the source images, we're done
   if args.command == "analyze":
@@ -1068,24 +1155,96 @@ def main():
 
   print()
 
-  # If args.beginning or args.end are named moments, convert them to datetimes
-  if not isinstance(args.beginning, datetime):
-    if args.beginning[0] not in named_moments:
-      argparser.error('beginning "{}" undefined'.format(args.beginning[0]))
-    args.beginning = named_moments[args.beginning[0]] + \
-			timedelta(seconds = args.beginning[1])
+  # If args.beginning or args.end are not datetimes, convert them to datetimes
+  prev_argname = None
 
-  if not isinstance(args.end, datetime):
-    if args.end[0] not in named_moments:
-      argparser.error('end "{}" undefined'.format(args.end[0]))
-    args.end = named_moments[args.end[0]] + \
-			timedelta(seconds = args.end[1])
+  for argname in ("beginning", "end"):
+
+    # Get the argument's value
+    argval = getattr(args, argname)
+
+    # If an ISO datetime was passed, use it as-is. Otherwise a "virtual" moment
+    # - with/without named moment and with/without a relative/absolute time or
+    # image offset - was passed
+    if not isinstance(argval, datetime):
+
+      named_moment, time_offset, image_offset = argval
+
+      # If we have a named moment, use it. Otherwise use the previous moment
+      if named_moment:
+        if named_moment not in named_moment_datetimes:
+          argparser.error('{}: named moment "{}" undefined'.
+				format(argname, named_moment))
+        moment = named_moment_datetimes[named_moment]
+
+      else:
+        if not prev_argname:
+          argparser.error("{} cannot be relative".format(argname))
+        moment = getattr(args, prev_argname)
+
+      # Add the time offset
+      moment += timedelta(seconds = time_offset)
+
+      # Do we have an image offset
+      if image_offset != 0:
+
+        # Build an ordered list of image datetimes
+        img_datetimes = [v.datetime for v in imgs_info.values()]
+
+        img_offset_error_msg_stem = "{}: cannot skip {} images {}".\
+					format(argname, abs(image_offset),
+					"backward" if image_offset < 0 else \
+					"forward")
+
+        # Find the image with a datetime equivalent to, or immediately after
+        # the moment - which can only error out if we don't have a named event
+        # and the moment comes from the previous argument
+        for i, dt in enumerate(img_datetimes):
+          if dt == moment:
+            break
+          if dt > moment:
+            if i == 0:
+              argparser.error("{}: {} is dated before the first image".\
+				format(img_offset_error_msg_stem, prev_argname))
+            moment = dt
+            break
+        else:
+          argparser.error("{}: {} is dated after the last image".\
+				format(img_offset_error_msg_stem, prev_argname))
+
+        # Make sure we can skip the desired number of images
+        skippable_imgs_back = i
+        skippable_imgs_fwd = total_imgs - i - 1
+
+        if image_offset < 0 and -image_offset > skippable_imgs_back:
+          argparser.error("{}: {} images can be skipped back".\
+				format(img_offset_error_msg_stem,
+					"only {}".format(skippable_imgs_back) \
+						if(skippable_imgs_back) else \
+					"no",
+					skippable_imgs_back))
+
+        elif image_offset > 0 and image_offset > skippable_imgs_fwd:
+          argparser.error("{}: {} images can be skipped forward".\
+				format(img_offset_error_msg_stem,
+					"only {}".format(skippable_imgs_fwd) \
+						if(skippable_imgs_fwd) else \
+					"no",
+					skippable_imgs_fwd))
+
+        # Skip the desired number of images
+        i += image_offset
+
+        # Replace the moment with the datetime from the image we have skipped to
+        moment = img_datetimes[i]
+
+      # Replace the argument with its datetime equivalent
+      setattr(args, argname, moment)
+
+    prev_argname = argname
 
   # Make sure the end is after the beginning
-  if args.beginning == args.end:
-    argparser.error("beginning and end are the same")
-
-  elif args.beginning > args.end:
+  if args.beginning > args.end:
     argparser.error("beginning after the end")
 
   # Exclude images before the beginning and after the end
