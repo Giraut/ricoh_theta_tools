@@ -82,3 +82,9 @@ Version 1.5.0 - 24/10/2026 - Added compile_theta_images.py program and sample
                              shell script to process Theta photos shot at
                              regular intervals and render them into timelapse
                              videos or combined images
+Version 1.6.0 - 25/10/2026 - Added GIMP plugin to tag stuck pixels with
+                             selection boxes and log the coordinates of the
+                             selections in the XWindow geometry format
+                             understoo by compile_theta_images.py to apply
+                             delogo filters on the stuck pixels
+                           - Improvements / bugfixes to compile_theta_images.py
