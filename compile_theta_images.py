@@ -271,6 +271,7 @@ def argparse_moment_specifier_type(value):
     # Get the optional offset absolute value
     if m[3] is None:
       has_offset = False
+      offset = None
     else:
       has_offset = True
       try:
@@ -300,7 +301,7 @@ def argparse_moment_specifier_type(value):
       raise argparse.ArgumentTypeError("{}: offset after named moment must be "
 					"relative (+ or -)".format(m[0]))
 
-    if is_time_offset and not has_offset:
+    if not has_offset and is_time_offset:
       raise argparse.ArgumentTypeError("{}: time offset value required".
 					format(m[0]))
 
@@ -308,20 +309,15 @@ def argparse_moment_specifier_type(value):
       raise argparse.ArgumentTypeError("{}: image number offset {} must be "
 					"an integer".format(m[0], m[3]))
 
-    # Normalize the returned values
-    if not has_offset:
-      time_offset = 0
-      image_offset = 0
-
-    else:
+    # Scale the offset
+    if has_offset:
       offset *= offset_sign * offset_multiplier
-      time_offset = offset if is_time_offset else 0
-      image_offset = offset if not is_time_offset else 0
 
+    # Turn an absolute offset into a relative one
     if has_offset and not offset_is_relative:
       named_moment = "first"
 
-    return (named_moment, time_offset, image_offset)
+    return (named_moment, offset, is_time_offset)
 
   else:
     named_moment = None
@@ -1168,7 +1164,7 @@ def main():
     # image offset - was passed
     if not isinstance(argval, datetime):
 
-      named_moment, time_offset, image_offset = argval
+      named_moment, offset, is_time_offset = argval
 
       # If we have a named moment, use it. Otherwise use the previous moment
       if named_moment:
@@ -1182,66 +1178,77 @@ def main():
           argparser.error("{} cannot be relative".format(argname))
         moment = getattr(args, prev_argname)
 
-      # Add the time offset
-      moment += timedelta(seconds = time_offset)
+      # Do we have an offset?
+      if offset is not None:
 
-      # Do we have an image offset
-      if image_offset != 0:
+        # Is it a time offset?
+        if is_time_offset:
 
-        # Build an ordered list of image datetimes
-        img_datetimes = [v.datetime for v in imgs_info.values()]
+          # Simply add the offset to the moment
+          moment += timedelta(seconds = offset)
 
-        img_offset_error_msg_stem = "{}: cannot skip {} images {}".\
-					format(argname, abs(image_offset),
-					"backward" if image_offset < 0 else \
+        # We have an image offset
+        else:
+
+          # Build an ordered list of image datetimes
+          img_datetimes = [v.datetime for v in imgs_info.values()]
+
+          img_offset_error_msg_stem = "{}: cannot skip {} images {}".\
+					format(argname, abs(offset),
+					"backward" if offset < 0 else \
 					"forward")
 
-        # Find the image with a datetime equivalent to, or immediately after
-        # the moment - which can only error out if we don't have a named event
-        # and the moment comes from the previous argument
-        for i, dt in enumerate(img_datetimes):
-          if dt == moment:
-            break
-          if dt > moment:
-            if i == 0:
-              argparser.error("{}: {} is dated before the first image".\
+          # Find the image with a datetime equivalent to, or immediately after
+          # the moment - which can only error out if we don't have a named event
+          # and the moment comes from the previous argument
+          for i, dt in enumerate(img_datetimes):
+            if dt == moment:
+              break
+            if dt > moment:
+              if i == 0:
+                argparser.error("{}: {} is dated before the first image".\
 				format(img_offset_error_msg_stem, prev_argname))
-            moment = dt
-            break
-        else:
-          argparser.error("{}: {} is dated after the last image".\
+              moment = dt
+              break
+          else:
+            argparser.error("{}: {} is dated after the last image".\
 				format(img_offset_error_msg_stem, prev_argname))
 
-        # Make sure we can skip the desired number of images
-        skippable_imgs_back = i
-        skippable_imgs_fwd = total_imgs - i - 1
+          # Make sure we can skip the desired number of images
+          skippable_imgs_back = i
+          skippable_imgs_fwd = total_imgs - i - 1
 
-        if image_offset < 0 and -image_offset > skippable_imgs_back:
-          argparser.error("{}: {} images can be skipped back".\
+          if offset < 0 and -offset > skippable_imgs_back:
+            argparser.error("{}: {} images can be skipped back".\
 				format(img_offset_error_msg_stem,
 					"only {}".format(skippable_imgs_back) \
 						if(skippable_imgs_back) else \
 					"no",
 					skippable_imgs_back))
 
-        elif image_offset > 0 and image_offset > skippable_imgs_fwd:
-          argparser.error("{}: {} images can be skipped forward".\
+          elif offset > 0 and offset > skippable_imgs_fwd:
+            argparser.error("{}: {} images can be skipped forward".\
 				format(img_offset_error_msg_stem,
 					"only {}".format(skippable_imgs_fwd) \
 						if(skippable_imgs_fwd) else \
 					"no",
 					skippable_imgs_fwd))
 
-        # Skip the desired number of images
-        i += image_offset
+          # Skip the desired number of images
+          i += offset
 
-        # Replace the moment with the datetime from the image we have skipped to
-        moment = img_datetimes[i]
+          # Replace the moment with the datetime from the image we have skipped to
+          moment = img_datetimes[i]
 
       # Replace the argument with its datetime equivalent
       setattr(args, argname, moment)
 
     prev_argname = argname
+
+  # Print the times of the beginning and the end
+  print("beginning: {}".format(args.beginning))
+  print("      end: {}".format(args.end))
+  print()
 
   # Make sure the end is after the beginning
   if args.beginning > args.end:
