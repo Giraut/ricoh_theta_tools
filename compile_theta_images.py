@@ -51,8 +51,8 @@ default_timelapse_vp9_quality = 30
 default_timelapse_framerate = 25 #fps
 
 # Default average image encoding options
-max_averageable_images = 200	# Maximum number of images to average out so we
-				# don't run in weird color problems
+max_averageable_images = 1024	# Maximum number of images ffmpeg's tmix can
+				# deal with
 
 default_average_image_width = 0 # No rescaling
 default_average_image_height = 0 # No rescaling
@@ -338,6 +338,39 @@ def argparse_moment_specifier_type(value):
 
 
 
+def argparse_time_offset_type(value):
+  """Argparse type for a valid time offset in the following format:
+
+  [+-]<float><d|h|m|s>
+
+  E.g.:
+
+  +1h, -30s, 1.5d
+  """
+
+  if not value:
+      raise argparse.ArgumentTypeError("empty time offset")
+
+  m = re.match(r"^([+\-0-9\.]+)([dhms])$", value, re.I)
+
+  if m:
+
+    # Get the offset value
+    try:
+      offset = float(m[1])
+    except:
+      raise argparse.ArgumentTypeError("{}: invalid time offset".format(value))
+
+    # Scale the offset value according to the time unit
+    offset *= {"d": 86400,
+		"h": 3600,
+		"m": 60,
+		"s": 1}[m[2].lower()]
+
+    return timedelta(seconds = offset)
+
+
+
 def argparse_video_filename_type(value):
   """Argparse type for a valid mp4 or webm video filename
   """
@@ -458,6 +491,21 @@ def mark_file_spherical(fpath):
 ### Main routine
 def main():
 
+  # Turn any sequence of non-positional arguments like -a / --arg followed by
+  # an argument that starts with "-[0-9]" into -a=-[0-9]... / --arg=-[0-9]...
+  # because argparse has no option to tell it -[0-9] can never be an argument
+  # name and is always a value
+  new_argv = sys.argv[:2]
+  for a in sys.argv[2:]:
+    if len(a) >= 2 and len(new_argv[-1]) >= 2 and \
+		a[0] == "-" and a[1] in "0123456789" and \
+		new_argv[-1][0] == "-" and new_argv[-1][1] not in "0123456789":
+      prev_a = new_argv.pop(-1)
+      new_argv.append(prev_a + "=" + a)
+    else:
+      new_argv.append(a)
+  sys.argv = new_argv
+
   # Parse the command line arguments
   argparser = argparse.ArgumentParser()
   subparsers = argparser.add_subparsers()
@@ -496,6 +544,14 @@ def main():
 	  "srcdir",
 	  type = str,
 	  help = "Directory containing the source images"
+	)
+
+    sp.add_argument(
+	  "-o", "--image-timestamp-offset",
+	  type = argparse_time_offset_type,
+	  help = "Time offset to apply to the images' timestamps, in case the "
+			"date / time wasn't set properly in the camera when "
+			"the images were captured. Default: no time offset"
 	)
 
   # Option valid for all encoding commands
@@ -1086,6 +1142,13 @@ def main():
   with open(_image_exif_info_cache_file, "w") as f:
     print(j, file = f)
 
+  # Apply the optional time offset to the timestamps of the images we're
+  # concerned with, in case the date / time wasn't set properly in the camera
+  # when the images were captured
+  if args.image_timestamp_offset is not None:
+    for fpath in imgs_info:
+      cached_imgs_info[fpath].datetime += args.image_timestamp_offset
+
   # Sort the info of the images we're concerned with by date
   imgs_info = OrderedDict(sorted(imgs_info.items(),
 					key = lambda item: item[1].datetime))
@@ -1371,12 +1434,18 @@ def main():
   # Add in-video timestamp
   if args.command == "timelapse" and not args.no_timestamp:
 
-    first_img_tstamp = next(iter(imgs_info.values())).datetime.timestamp()
+    first_img_tstamp_datetime = next(iter(imgs_info.values())).datetime
+    first_img_tstamp = first_img_tstamp_datetime.timestamp()
+
+    # Because we use gmtime in the ffmpeg drawtext filter, add the time offset
+    # of the first image's timestamp's timezone to force drawtext to display
+    # the correct local time at the time of capture
+    first_img_tstamp += first_img_tstamp_datetime.utcoffset().total_seconds()
 
     video_filters += "drawtext=" \
 				"fontsize={}:" \
 				"fontfile={}:" \
-				r"text='%{{pts\:localtime\:{}\:%H\\\:%M}}':" \
+				r"text='%{{pts\:gmtime\:{}\:%H\\\:%M}}':" \
 				"fontcolor=white:" \
 				"box=1:" \
 				"boxcolor=black@0.5:" \
@@ -1558,10 +1627,11 @@ def main():
       concat_list += "file 'file:{}'\n".format(fpath)
 
     # Set the frame mixing arguments
-    video_filters += "format=yuv420p," \
+    video_filters += "format=gbrp," \
 			"tmix=" \
-			"frames={}:" \
-			"weights=1".\
+				"frames={}:" \
+				"weights=1" \
+			"format=rgb24".\
 			format(nb_images)
 
     # Add crosshairs
@@ -1617,9 +1687,10 @@ def main():
       concat_list += "file 'file:{}'\n".format(fpath)
 
     # Set the frame combining arguments
-    video_filters += "format=rgb24," \
+    video_filters += "format=gbrp," \
 			"lagfun=" \
-				"decay=1"
+				"decay=1," \
+			"format=rgb24"
 
     # Add crosshairs
     if args.crosshairs:
