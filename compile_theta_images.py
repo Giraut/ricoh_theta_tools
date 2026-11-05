@@ -51,8 +51,8 @@ default_timelapse_vp9_quality = 30
 default_timelapse_framerate = 25 #fps
 
 # Default average image encoding options
-max_averageable_images = 1024	# Maximum number of images ffmpeg's tmix can
-				# deal with
+max_averageable_images = 200	# Maximum number of images to average out so we
+				# don't run in weird color problems
 
 default_average_image_width = 0 # No rescaling
 default_average_image_height = 0 # No rescaling
