@@ -51,7 +51,7 @@ default_timelapse_vp9_quality = 30
 default_timelapse_framerate = 25 #fps
 
 # Default average image encoding options
-max_averageable_images = 200	# Maximum number of images to average out so we
+max_averageable_images = 150	# Maximum number of images to average out so we
 				# don't run in weird color problems
 
 default_average_image_width = 0 # No rescaling
@@ -77,6 +77,7 @@ default_combine_image_height = 0 # No rescaling
 
 default_combine_delogo_show_zones_color = "red"
 
+default_combine_temporal_denoise = 3
 default_combine_spatial_denoise = 0
 
 default_combine_shadows_correction = 0.10
@@ -1000,6 +1001,14 @@ def main():
 	)
 
   subparser_combine.add_argument(
+	  "-td", "--temporal-denoise",
+	  type = int,
+	  help = "Temporal denoise. 0 to disable. Default: {}".
+			format(default_combine_temporal_denoise),
+	  default = default_combine_temporal_denoise
+	)
+
+  subparser_combine.add_argument(
 	  "-sd", "--spatial-denoise",
 	  type = int,
 	  help = "Spatial denoise. 0 to disable. Default: {}".
@@ -1393,7 +1402,7 @@ def main():
     video_filters += "scale={}:{},".format(args.width, args.height)
 
   # Add temporal denoise
-  if args.command == "timelapse" and args.temporal_denoise > 0:
+  if args.command in ("timelapse", "combine") and args.temporal_denoise > 0:
     video_filters += "tmedian=radius={},".format(args.temporal_denoise)
 
   # Add spatial denoise
