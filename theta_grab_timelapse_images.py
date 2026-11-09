@@ -32,9 +32,10 @@ except:
 take_photo_every = 15 #s
 check_camera_state_every = 300 #s
 run_camera_in_silent_powermode = False
-turn_off_camera_when_battery_below = 30 #%
+turn_off_camera_when_battery_below = 20 #%
+reboot_camera_at_dusk_or_dawn_when_uptime_over = 14400 #s
 pov_correction_yaw = 0 #deg
-pov_correction_pitch = 65.09 #deg
+pov_correction_pitch = 0 #deg
 pov_correction_roll = 0 #deg
 retries = 20
 wait_before_retry = 2 #s
@@ -293,6 +294,32 @@ def retry(rt, fct, *args, **kwargs):
 
 
 
+def secs_to_dhms(s):
+  """Create a days / hours / minutes / seconds string from a number of seconds
+  """
+
+  d = s // 86400
+  s %= 86400
+  h = s // 3600
+  s %= 3600
+  m = s // 60
+  s %= 60
+
+  dhms = ""
+
+  if d > 0:
+    dhms += " {}d".format(d)
+  if h > 0 or d > 0:
+    dhms += " {}h".format(h)
+  if m > 0 or h > 0 or d > 0:
+    dhms += " {}m".format(m)
+  if s > 0 or (d == 0 and h == 0 and s == 0):
+    dhms += " {}s".format(s)
+
+  return dhms[1:]
+
+
+
 def log(loglevel, *args, prefix = True, linefeed = True, file = sys.stdout):
   """Print part or all of a timestamped log message into the supplied
   file handle
@@ -419,6 +446,8 @@ def main():
   next_day_night_setup_tstamp = NEVER
   next_state_check_tstamp = NEVER
   next_photo_tstamp = NEVER
+
+  last_camera_reconfiguration_tstamp = NEVER
 
   camera_set_for_daytime = None	# Current setup presumed unknown
 
@@ -574,6 +603,7 @@ def main():
 
         tries = configure_camera_basic_setup(rt)
 
+        last_camera_reconfiguration_tstamp = time()
         next_basic_setup_tstamp = NEVER
 
         # If we have location data and daytime / nighttime reconfiguration
@@ -649,51 +679,95 @@ def main():
           is_daytime = elevation(observer, now_cam) >= -twilight_depression
           next_dawn_dusk_time_cam = None
 
+        do_reschedule = True
+
         # Should we configure or reconfigure the camera?
         if is_daytime != camera_set_for_daytime:
 
-          log(INFO, "Camera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
+          # Get the camera's uptime
+          info, tries = retry(rt, rt.get_info,
+				reconnect_tries = reconnect_tries)
+          uptime = info["uptime"]
+
+          # If the shots are not triggered by an external intervalometer and
+          # the camera has been up for too long, reboot it before reconfiguring
+          # it for daytime or nighttime capture
+          if not args.intervalometer and \
+			uptime > reboot_camera_at_dusk_or_dawn_when_uptime_over:
+
+            log(INFO, "Camera has been up for {}: rebooting...".
+			format(secs_to_dhms(uptime)))
+
+            do_reschedule = False
+
+            # Reboot the camera
+            try:
+              rt.reboot()
+              next_reboot_tstamp = NEVER
+              next_basic_setup_tstamp = now
+
+            except Exception as e:
+              log(ERROR, str(e))
+              next_reboot_tstamp = now
+
+          # Reconfiguring the camera for daytime or nighttime capture
+          else:
+
+            log(INFO, "Camera location time {:%Y-%m-%d %H:%M:%S} ({}time)".
 			format(now_cam, "day" if is_daytime else "night"))
 
-          if next_dawn_dusk_time_cam is not None:
-            log(INFO, "Next {}: {:%Y-%m-%d %H:%M:%S}".
+            if next_dawn_dusk_time_cam is not None:
+              log(INFO, "Next {}: {:%Y-%m-%d %H:%M:%S}".
 			format("dusk" if is_daytime else "dawn",
 				next_dawn_dusk_time_cam))
 
-          if is_daytime:
-            tries = configure_camera_for_daytime_capture(rt)
-          else:
-            tries = configure_camera_for_nighttime_capture(rt)
+            if is_daytime:
+              tries = configure_camera_for_daytime_capture(rt)
+            else:
+              tries = configure_camera_for_nighttime_capture(rt)
 
-          # If the shots are triggered by an external intervalometer and we had
-          # to try more than once to set daytime or nighttime capture, it's
-          # probably because a shot was being taken, so ignore the retries
-          if args.intervalometer and tries > 1:
-            tries = 1
+            last_camera_reconfiguration_tstamp = time()
 
-          camera_set_for_daytime = is_daytime
+            # If the shots are triggered by an external intervalometer and we
+            # had to try more than once to set daytime or nighttime capture,
+            # it's probably because a shot was being taken, so ignore the
+            # retries
+            if args.intervalometer and tries > 1:
+              tries = 1
 
-        # Schedule the next daytime / nighttime reconfiguration attempt
-        if next_dawn_dusk_time_cam:
-          next_day_night_setup_tstamp += (next_dawn_dusk_time_cam - \
+            camera_set_for_daytime = is_daytime
+
+        if do_reschedule:
+
+          # Schedule the next daytime / nighttime reconfiguration attempt
+          if next_dawn_dusk_time_cam:
+            next_day_night_setup_tstamp += (next_dawn_dusk_time_cam - \
 						now_cam).seconds + 1
-        else:
-          next_day_night_setup_tstamp += 60
+          else:
+            next_day_night_setup_tstamp += 60
 
-        # If the shots are triggered by an external intervalometer and
-        # checking the state of the camera hasn't been started yet, schedule
-        # the next check
-        if args.intervalometer:
-          if next_state_check_tstamp == NEVER:
-            next_state_check_tstamp = time() + 1
+          # If the shots are triggered by an external intervalometer and
+          # checking the state of the camera hasn't been started yet, schedule
+          # the next check
+          if args.intervalometer:
+            if next_state_check_tstamp == NEVER:
+              next_state_check_tstamp = time() + 1
 
-        # We take the photos ourselves: if taking photos hasn't been started
-        # yet, schedule the next photo
-        elif next_photo_tstamp == NEVER:
-          next_photo_tstamp = time()
+          # We take the photos ourselves: if taking photos hasn't been started
+          # yet, schedule the next photo
+          elif next_photo_tstamp == NEVER:
+            next_photo_tstamp = time()
 
       # Should we take a photo?
       elif now >= next_photo_tstamp:
+
+        # If the camera was reconfigured too recently, wait 0.5 s between the
+        # last configuration action and the photo-taking, otherwise the camera
+        # sometimes throw a "403 Client Error: Forbidden for url..." error
+        if now - last_camera_reconfiguration_tstamp < 0.5:
+          wait_for = 0.5 - now + last_camera_reconfiguration_tstamp
+          if wait_for > 0:
+            sleep(wait_for)
 
         log(INFO, "Taking a photo{}".format("" if wait_for > -0.5 else \
 						" (late by {:0.1f} s)".
@@ -742,6 +816,10 @@ def main():
       # Should we check the camera's state?
       elif now >= next_state_check_tstamp:
 
+        info, tries = retry(rt, rt.get_info,
+				reconnect_tries = reconnect_tries)
+        uptime = info["uptime"]
+
         state, tries = retry(rt, rt.get_state,
 				reconnect_tries = reconnect_tries)
 
@@ -757,9 +835,10 @@ def main():
         else:
           errors = "/"
 
-        log(INFO, "Batt {:0.0f}% ({}), {:0.1f}C - PCB {:0.1f}C - Errors: {}".
-			format(batt_percent, batt_state, batt_temp, pcb_temp,
-				errors))
+        log(INFO, "Batt {:0.0f}% ({}), {:0.1f}C - PCB {:0.1f}C - Uptime {} - "
+			"Errors: {}".format(batt_percent, batt_state,
+						batt_temp, pcb_temp,
+						secs_to_dhms(uptime), errors))
 
         # Turn off the camera if the battery is too low
         if batt_percent < turn_off_camera_when_battery_below:
