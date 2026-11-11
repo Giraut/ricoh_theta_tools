@@ -597,6 +597,14 @@ def main():
 	)
 
   subparser_timelapse.add_argument(
+	  "-fmp4", "--fragmented-mp4",
+	  help = "When generating a M3U8 video, generate fragmented MP4 "
+			"segments. Needs HLS version 7 and above. Default: "
+			"MPEGTS segments",
+	  action = "store_true",
+	)
+
+  subparser_timelapse.add_argument(
 	  "-W", "--width",
 	  type = int,
 	  help = "Video width. If 0, don't scale the source images. "
@@ -1535,6 +1543,7 @@ def main():
 				"-f", "webm"]
 
     elif ext == "m3u8":
+      m3u8_segment_type = "fmp4" if args.fragmented_mp4 else "mpegts"
       video_encoding_args = ["-c:v", "libx264",
 				"-crf", "{}".format(args.x264_quality),
 				"-b:v", "0",
@@ -1546,7 +1555,7 @@ def main():
 				"-b:a", "128k",
 				"-start_number", "0",
 				"-hls_time", "10",
-				"-hls_segment_type", "fmp4",
+				"-hls_segment_type", m3u8_segment_type,
 				"-hls_playlist_type", "vod",
 				"-hls_list_size", "0",
 				"-async", "1",
@@ -1601,15 +1610,15 @@ def main():
     if ext != "m3u8":
       mark_file_spherical(outfile)
 
-    # If the video is an m3u8, since it's encoded as fragmented MP4, it has a
-    # init.mp4 header file that we need to set the spherical tags into
+    # If the video is an M3U8 with fragmented MP4 segments, it has a init.mp4
+    # header file that we need to set the spherical tags into
     #
     # Unfortunately, it doesn't have a boundary data media block (mdat box),
     # which prevents exiftool from working
     #
     # To side-step this, tack an empty mdat box to the end of the file, run
     # exiftool, then peel off the empty mdat box
-    else:
+    elif args.fragmented_mp4:
 
       hdr_file = os.path.join(outfile_dir, "init.mp4")
       empty_mdat_box = b"\x00\x00\x00\x08mdat"
