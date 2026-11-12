@@ -555,6 +555,12 @@ def main():
 			"the images were captured. Default: no time offset"
 	)
 
+    sp.add_argument(
+	  "-F", "--force-analysis",
+	  action = "store_true",
+	  help = "Re-analyze the source image files even if they are cached"
+	)
+
   # Option valid for all encoding commands
   for sp in [subparser_timelapse,
 		subparser_average,
@@ -1119,13 +1125,13 @@ def main():
   try:
 
     # Get information on the source images
-    # Analyze them if they're not in the cache
+    # Analyze them if they're not in the cache or if we force analysis
     for name in sorted(os.listdir(args.srcdir)):
       if os.path.splitext(name)[1][1:].lower() in acceptable_image_extensions:
 
         fpath = os.path.abspath(os.path.join(args.srcdir, name))
 
-        if fpath not in cached_imgs_info:
+        if fpath not in cached_imgs_info or args.force_analysis:
 
           print(name, end = "")
 
