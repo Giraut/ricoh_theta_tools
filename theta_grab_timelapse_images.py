@@ -111,6 +111,10 @@ theta_cameras_locations_file = "~/.ricoh_theta_location.json"
 # stopped) and immediately restarted, to keep the timing of the photos correct
 event_timestamps_file = "~/.ricoh_theta_timelapse_grab_event_timestamps-{}.json"
 
+# Capture log filename pattern
+capture_log_filename_pattern = "./theta_timelapse_capture-" \
+				"{start_date_time:%Y%m%dT%H%M%S}.log"
+
 
 
 ## Defines
@@ -320,28 +324,31 @@ def secs_to_dhms(s):
 
 
 
-def log(loglevel, *args, prefix = True, linefeed = True, file = sys.stdout):
-  """Print part or all of a timestamped log message into the supplied
-  file handle
+def log(loglevel, *args, prefix = True, linefeed = True):
+  """Print part or all of a timestamped log message into the log file handes
   """
+
+  global log_file_handles
 
   __last_linefeed = getattr(log, "__last_linefeed", True)
 
-  if prefix:
-    if not __last_linefeed:
-      print(file = file)
-    print(("[INFO] ", "[WARN] ", "[ERROR]")[loglevel],
+  for f in log_file_handles:
+
+    if prefix:
+      if not __last_linefeed:
+        print(file = f)
+      print(("[INFO] ", "[WARN] ", "[ERROR]")[loglevel],
 		"{:%Y-%m-%d %H:%M:%S}".format(datetime.now()),
-		end = " ", file = file)
+		end = " ", file = f)
 
-  print(*args, end = "", file = file)
+    print(*args, end = "", file = f)
 
-  if linefeed:
-    print(file = file)
+    if linefeed:
+      print(file = f)
+
+    f.flush()
 
   setattr(log, "__last_linefeed", linefeed)
-
-  file.flush()
 
 
 
@@ -349,6 +356,8 @@ def log(loglevel, *args, prefix = True, linefeed = True, file = sys.stdout):
 def main():
   """Main routine
   """
+
+  global log_file_handles
 
   # Parse the command line arguments
   argparser = argparse.ArgumentParser()
@@ -376,10 +385,20 @@ def main():
 	  action = "store_true"
 	)
 
+
+  argparser.add_argument(
+	  "-n", "--no-log",
+	  help = "Only log to stdout, don't create a separate capture log file",
+	  action = "store_true"
+	)
+
   if "argcomplete" in globals():
     argcomplete.autocomplete(argparser, always_complete_options = False)
 
   args = argparser.parse_args()
+
+  # Log only to stdout to start with
+  log_file_handles = [sys.stdout]
 
   # Load the Theta cameras' names and credentials file
   try:
@@ -451,10 +470,12 @@ def main():
 
   camera_set_for_daytime = None	# Current setup presumed unknown
 
-  # Try to reload event timings from the save file, in case the script was
-  # stopped and restarted, to keep the timing of the photos correct
-  # Don't use timestamps that are too far in the past or in the future
+  # Try to reload event timings and the name of the current capture log file
+  # from the save file, in case the script was stopped and restarted, to keep
+  # the timing of the photos correct and to continue logging to the same log
+  # file. Don't use timestamps that are too far in the past or in the future
   now = time()
+  capture_log_start_tstamp = now
 
   try:
 
@@ -462,10 +483,13 @@ def main():
 		"r") as f:
       j = json.load(f)
 
+    saved_capture_log_start_tstamp = j["capture_log_start_tstamp"]
     saved_next_day_night_setup_tstamp = j["next_day_night_setup_tstamp"]
     saved_next_state_check_tstamp = j["next_state_check_tstamp"]
     saved_next_photo_tstamp = j["next_photo_tstamp"]
 
+    assert type(saved_capture_log_start_tstamp) in (int, float), \
+		"Saved capture_log_start_tstamp should be an int or a float"
     assert type(saved_next_day_night_setup_tstamp) in (int, float), \
 		"Saved next_day_night_setup_tstamp should be an int or a float"
     assert type(saved_next_state_check_tstamp) in (int, float), \
@@ -506,6 +530,7 @@ def main():
 
     if use_saved_tstamps:
 
+      capture_log_start_tstamp = saved_capture_log_start_tstamp
       next_day_night_setup_tstamp = saved_next_day_night_setup_tstamp
       next_state_check_tstamp = saved_next_state_check_tstamp
       next_photo_tstamp = saved_next_photo_tstamp
@@ -521,6 +546,21 @@ def main():
 
   tries = 0
 
+  # Open the capture log file and add it to the file handles to log to, unless
+  # we've been told not to
+  if not args.no_log:
+
+    dt = datetime.fromtimestamp(capture_log_start_tstamp)
+    log_filename = capture_log_filename_pattern.format(start_date_time = dt)
+
+    try:
+      log_file_handles.append(open(os.path.expanduser(log_filename), "a"))
+
+    except Exception as e:
+      log(ERROR, "Cannot open log file {} for writing: {}".
+			format(log_filename, str(e)))
+      return -1
+
   while True:
 
     try:
@@ -532,7 +572,8 @@ def main():
       try:
         with open(os.path.expanduser(event_timestamps_file.format(args.camera)),
 			"w") as f:
-          j = {"next_day_night_setup_tstamp": next_day_night_setup_tstamp,
+          j = {"capture_log_start_tstamp": capture_log_start_tstamp,
+		"next_day_night_setup_tstamp": next_day_night_setup_tstamp,
 		"next_state_check_tstamp": next_state_check_tstamp,
 		"next_photo_tstamp": next_photo_tstamp}
           print(json.dumps(j, indent = 2), file = f)
