@@ -156,12 +156,22 @@ class ImageInfo:
       exif_datetime = metadata.get("EXIF:DateTimeOriginal")
       exif_tz_offset = metadata.get("EXIF:OffsetTimeOriginal")
 
+      # Round the timezone offset to the nearest quarter of an hour because the
+      # camera sometimes weirdly records timezone offsets that are 3 minutes off
+      # a normal timezone offset in the image's EXIF tags (e.g. EXIF offset time
+      # of +01:03 instead of +01:00)
+      exif_tz_hour, exif_tz_min = (int(s) for s in exif_tz_offset.split(":"))
+      exif_tz_min = round(exif_tz_min / 15) * 15
+      exif_tz_hour += exif_tz_min // 60
+      exif_tz_min %= 60
+
       # Generate the date / time + timezone offset in ISO format
       m = self.__datetime_regex.match(exif_datetime)
-      exif_datetime_iso = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}{}".\
+      exif_datetime_iso = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}" \
+				"{:+03d}:{:02d}".\
 				format(int(m[1]), int(m[2]), int(m[3]),
 					int(m[4]), int(m[5]), int(m[6]),
-					exif_tz_offset)
+					exif_tz_hour, exif_tz_min)
 
       # Store the EXIF values
       self.filename = os.path.basename(fpath)
