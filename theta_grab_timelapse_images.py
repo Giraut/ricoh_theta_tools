@@ -806,9 +806,9 @@ def main():
         # last configuration action and the photo-taking, otherwise the camera
         # sometimes throw a "403 Client Error: Forbidden for url..." error
         if now - last_camera_reconfiguration_tstamp < 0.5:
-          wait_for = 0.5 - now + last_camera_reconfiguration_tstamp
-          if wait_for > 0:
-            sleep(wait_for)
+          delay_photo_for = 0.5 - now + last_camera_reconfiguration_tstamp
+          if delay_photo_for > 0:
+            sleep(delay_photo_for)
 
         log(INFO, "Taking a photo{}".format("" if wait_for > -0.5 else \
 						" (late by {:0.1f} s)".
