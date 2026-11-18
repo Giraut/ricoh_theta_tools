@@ -99,6 +99,7 @@ import sys
 import json
 from collections import OrderedDict
 import argparse
+import threading
 import subprocess
 from datetime import datetime, timezone, timedelta
 import exiftool	# type: ignore
@@ -499,6 +500,29 @@ def mark_file_spherical(fpath):
 
 
 
+def pipe_writer(text, pipe_write_fd):
+  """Thread to feed text to the writing end of a pipe
+  """
+
+  with os.fdopen(pipe_write_fd, "w") as fd:
+    print(text, file = fd, end = "", flush = True)
+
+
+
+def secs_to_hh_mm_ss_ms(s, ms_sep):
+  """Turn a timestamp in seconds into a string with format HH:MM:SS<ms_sep>MSS
+  ms_sep is the separator between hh:mm:ss and the milliseconds
+  """
+
+  ms = int(round(s * 1000))
+  h, r = divmod(ms, 3600000)
+  m, r = divmod(r, 60000)
+  s, ms = divmod(r, 1000)
+
+  return "{:02d}:{:02d}:{:02d}{}{:03d}".format(h, m, s, ms_sep, ms)
+
+
+
 ### Main routine
 def main():
 
@@ -616,7 +640,7 @@ def main():
 	  "-fmp4", "--fragmented-mp4",
 	  help = "When generating a M3U8 video, generate fragmented MP4 "
 			"segments. Needs HLS version 7 and above. Default: "
-			"MPEGTS segments",
+			"MPEG-TS segments",
 	  action = "store_true",
 	)
 
@@ -679,15 +703,23 @@ def main():
 	)
 
   subparser_timelapse.add_argument(
-	  "-nt", "--no-timestamp",
+	  "-tb", "--timestamp-burned-in-video",
 	  action = "store_true",
-	  help = "Disable in-video timestamp. Default: enabled"
+	  help = "Burn timestamp in the video. Default: no timestamp burned in "
+			"the video"
+	)
+
+  subparser_timelapse.add_argument(
+	  "-ts", "--timestamp-subtitles",
+	  action = "store_true",
+	  help = "Add timestamp in the form of soft subtitles. Default: no "
+			"subtitles"
 	)
 
   subparser_timelapse.add_argument(
 	  "-tx", "--timestamp-pos-x",
 	  type = int,
-	  help = "Timestamp X position. "
+	  help = "For timestamp burned in the video: timestamp X position. "
 			"Default: {}".format(default_timelapse_timestamp_pos_x),
 	  default = default_timelapse_timestamp_pos_x
 	)
@@ -695,7 +727,7 @@ def main():
   subparser_timelapse.add_argument(
 	  "-ty", "--timestamp-pos-y",
 	  type = int,
-	  help = "Timestamp Y position. "
+	  help = "For timestamp burned in the video: timestamp Y position. "
 			"Default: {}".format(default_timelapse_timestamp_pos_y),
 	  default = default_timelapse_timestamp_pos_y
 	)
@@ -703,7 +735,8 @@ def main():
   subparser_timelapse.add_argument(
 	  "-tff", "--timestamp-font-file",
 	  type = str,
-	  help = "Timestamp font file. Default: {}".
+	  help = "For timestamp burned in the video: timestamp font file. "
+			"Default: {}".
 			format(default_timelapse_timestamp_font_file),
 	  default = default_timelapse_timestamp_font_file
 	)
@@ -711,7 +744,8 @@ def main():
   subparser_timelapse.add_argument(
 	  "-tfs", "--timestamp-font-size",
 	  type = int,
-	  help = "Timestamp font size. Default: {}".
+	  help = "For timestamp burned in the video: timestamp font size. "
+			"Default: {}".
 			format(default_timelapse_timestamp_font_size),
 	  default = default_timelapse_timestamp_font_size
 	)
@@ -1464,8 +1498,8 @@ def main():
   if args.command == "timelapse" and args.enable_remanence:
     video_filters += "lagfun=decay={},".format(args.remanence_rate)
 
-  # Add in-video timestamp
-  if args.command == "timelapse" and not args.no_timestamp:
+  # Add burned-in timestamp
+  if args.command == "timelapse" and args.timestamp_burned_in_video:
 
     first_img_tstamp_datetime = next(iter(imgs_info.values())).datetime
     first_img_tstamp = first_img_tstamp_datetime.timestamp()
@@ -1536,6 +1570,102 @@ def main():
     if duration is not None:
       concat_list += "duration {}\n".format(duration)
 
+    # Build the content of the subtitles file if we add a timestamp in the form
+    # of subtitles
+    if args.timestamp_subtitles:
+
+      # If the video to generate is a MP4, create a .srt file, otherwise create
+      # a WebVTT .vtt file
+      if ext == "mp4":
+        st_file = os.path.join(outfile_dir, stem + ".srt")
+        st = ""
+        entry_start = "{sc}\n{t} --> "
+        entry_end = "{t}\n{ls}\n"
+        ms_sep = ","
+
+        ffmpeg_soft_subtitles_output_args = ["-c:s", "mov_text"]
+
+      else:
+        st_file = os.path.join(outfile_dir, stem + ".vtt")
+        st = "WEBVTT\n"				\
+		"\n"				\
+		"STYLE\n"			\
+		"::cue {\n"			\
+		"  font-family: monospace;\n"	\
+		"}\n"				\
+		"\n"
+        entry_start = "{t} --> "
+        entry_end = "{t}\n{ls}\n"
+        ms_sep = "."
+
+        ffmpeg_soft_subtitles_output_args = ["-c:s", "webvtt"]
+
+        # If the video is a M3U8 with MPEG-TS segments, replace the top .m3u8
+        # file with a master playlist that references both the video and
+        # the subtitles
+        if ext == "m3u8" and not args.fragmented_mp4:
+          ffmpeg_soft_subtitles_output_args += [
+				"-var_stream_map", "v:0,s:0,sgroup:subtitle",
+				"-master_pl_name", basename]
+          basename = "video.m3u8"
+
+      # Generate the content of the subtitles file
+      first_tstamp = None
+
+      for v in imgs_info.values():
+
+        tstamp = v.datetime.timestamp() / args.speedup
+        subtitle = "{:%H:%M}".format(v.datetime)
+
+        if first_tstamp is not None:
+
+          prev_subtitle_tstamp = subtitle_tstamp
+          subtitle_tstamp = tstamp - first_tstamp
+
+          if subtitle != last_subtitle:
+            subtitle_counter +=1
+            st += (entry_end + "\n" + entry_start).\
+			format(t = secs_to_hh_mm_ss_ms(subtitle_tstamp,
+							ms_sep),
+				ls = last_subtitle,
+				sc = subtitle_counter)
+
+        else:
+
+          first_tstamp = tstamp
+
+          prev_subtitle_tstamp = 0
+          subtitle_tstamp = 0
+
+          subtitle_counter = 1
+
+          st += entry_start.format(t = secs_to_hh_mm_ss_ms(subtitle_tstamp,
+								ms_sep),
+					sc = subtitle_counter)
+
+        last_subtitle = subtitle
+
+      if first_tstamp is not None:
+        st += entry_end.\
+		format(t = secs_to_hh_mm_ss_ms(subtitle_tstamp + \
+							subtitle_tstamp - \
+							prev_subtitle_tstamp,
+						ms_sep),
+			ls = last_subtitle)
+
+      # Create a pipe to feed the subtitles to ffmpeg without creating a file
+      pipe_read_fd, pipe_write_fd = os.pipe()
+
+      ffmpeg_soft_subtitles_input_args = ["-i", "pipe:{}".format(pipe_read_fd),
+						"-map", "0:v:0",
+						"-map", "1:0"]
+      ffmpeg_pass_fds = (pipe_read_fd,)
+
+    else:
+      ffmpeg_soft_subtitles_input_args = []
+      ffmpeg_soft_subtitles_output_args = []
+      ffmpeg_pass_fds = ()
+
     # Add crosshairs
     if args.crosshairs:
       video_filters += crosshairs_vf_args + ","
@@ -1575,6 +1705,8 @@ def main():
 				"-hls_playlist_type", "vod",
 				"-hls_list_size", "0",
 				"-async", "1",
+				"-muxdelay", "0",
+				"-muxpreload", "0",
 				"-f", "hls"]
 
       # Create a directory of the same name as the stem of the filename
@@ -1593,24 +1725,39 @@ def main():
 			"-protocol_whitelist", "pipe,file",
 			"-f", "concat",
 			"-safe", "0",
-			"-i", "pipe:0",
+			"-i", "pipe:0"] + \
+			ffmpeg_soft_subtitles_input_args + [
 			"-vf", video_filters,
 			"-r", "{}".format(args.framerate)] + \
-			video_encoding_args + [ \
+			video_encoding_args + \
+			ffmpeg_soft_subtitles_output_args + [
 			outfile]
 
-      # Run the ffmpeg command
+      # Start the pipe writer if a pipe exists, then run the ffmpeg command
       for i, arg in enumerate(ffmpeg_cmd):
         print("{:>14}: {}".format("ffmpeg command" if i == 0 else \
 					"arg #{}".format(i),
 					ffmpeg_cmd[i]))
       print()
 
-      subprocess.run(ffmpeg_cmd,
+      if ffmpeg_pass_fds:
+        pipe_writer_thread = threading.Thread(target = pipe_writer,
+						args = (st, pipe_write_fd))
+        pipe_writer_thread.start()
+
+      try:
+        subprocess.run(ffmpeg_cmd,
 			input = concat_list,
+			pass_fds = ffmpeg_pass_fds,
 			stderr = subprocess.STDOUT,
 			text = True,
 			check = True)
+
+      finally:
+        if ffmpeg_pass_fds:
+          os.close(pipe_read_fd)
+          pipe_writer_thread.join()
+
       print()
 
     except KeyboardInterrupt:
