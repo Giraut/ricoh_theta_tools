@@ -93,3 +93,13 @@ Version 1.6.1 - 08/11/2026 - Colorspace and timestamp handling corrections in
                              argument to correct image timestamps manually
                            - Added a shell script to transcode a single
                              panoramic video file into m3u8 format
+Version 1.7.0 - 18/11/2026 - In theta_grab_timelapse_images.py, reboot the
+                             camera at dusk or dawn if it's been running for
+                             more than 4 hours, in case its firmware goes
+                             unstable. Silently log to a timestamped log file in
+                             addition to logging on stdout.
+                           - In compile_theta_images.py, correct faulty timezone
+                             information from the images' EXIF data. Added
+                             option to force the re-analysis of the source
+                             images. Added option to generate a timestamp as a
+                             soft subtitle in all timelapse video formats.
