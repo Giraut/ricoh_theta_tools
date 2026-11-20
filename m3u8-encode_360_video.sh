@@ -32,11 +32,23 @@ fi
 
 OUTFILE=${DST}/${DST}.m3u8
 
-# Determine if the video has subtitles and adapt the encoding options and output filenames accordingly
+# Map the output video streams
+VAR_STREAM_MAPPING="-var_stream_map v:0"
+
+# If the video has audio, add it to ouput streams
+if [ "$(ffprobe -v error -select_streams a ${SRC} -show_entries stream=index)" ]; then
+  VAR_STREAM_MAPPING="${VAR_STREAM_MAPPING},a:0"
+fi
+
+# Does the video have subtitles?
 if [ "$(ffprobe -v error -select_streams s ${SRC} -show_entries stream=index)" ]; then
-  SUBTITLES_ARGS="-var_stream_map v:0,s:0,sgroup:subtitle"
+
+  # Add the subtitles to the output streams
+  VAR_STREAM_MAPPING="${VAR_STREAM_MAPPING},s:0,sgroup:subtitle"
+
+  # If the video has MPEG-TS segments, rename the video proper so the master playlist has the name we want
   if [ ${SEGMENT_TYPE} == "mpegts" ]; then
-    SUBTITLES_ARGS="${SUBTITLES_ARGS} -master_pl_name ${DST}.m3u8"
+    MASTER_PLAYLIST="-master_pl_name ${DST}.m3u8"
     OUTFILE=${DST}/video.m3u8
   fi
 fi
@@ -45,8 +57,7 @@ fi
 let KEYINT_MIN=FPS*2
 
 mkdir -p ${DST}
-
-ffmpeg -i ${SRC} -c:v libx264 -crf 23 -b:v 0 -pix_fmt yuv420p -g ${KEYINT_MIN} -keyint_min ${KEYINT_MIN} -sc_threshold 0 -c:a aac -b:a 128k -start_number 0 -hls_time 10 -hls_list_size 0 -async 1 -hls_segment_type ${SEGMENT_TYPE} ${SUBTITLES_ARGS} -f hls ${OUTFILE}
+ffmpeg -i ${SRC} -c:v libx264 -crf 23 -b:v 0 -pix_fmt yuv420p -g ${KEYINT_MIN} -keyint_min ${KEYINT_MIN} -sc_threshold 0 -c:a aac -b:a 128k -start_number 0 -hls_time 10 -hls_list_size 0 -async 1 -hls_segment_type ${SEGMENT_TYPE} ${VAR_STREAM_MAPPING} ${MASTER_PLAYLIST} -muxdelay 0 -muxpreload 0 -f hls ${OUTFILE}
 
 # Set the destination video's XMP tags in init.mp4 if the segment type is fragmented MP4 (fmp4)
 if [ ${SEGMENT_TYPE} = "fmp4" ]; then
