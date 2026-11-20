@@ -30,12 +30,23 @@ if [ ! "${FPS}" ]; then
   exit
 fi
 
+OUTFILE=${DST}/${DST}.m3u8
+
+# Determine if the video has subtitles and adapt the encoding options and output filenames accordingly
+if [ "$(ffprobe -v error -select_streams s ${SRC} -show_entries stream=index)" ]; then
+  SUBTITLES_ARGS="-var_stream_map v:0,s:0,sgroup:subtitle"
+  if [ ${SEGMENT_TYPE} == "mpegts" ]; then
+    SUBTITLES_ARGS="${SUBTITLES_ARGS} -master_pl_name ${DST}.m3u8"
+    OUTFILE=${DST}/video.m3u8
+  fi
+fi
+
 # Transcode the video
 let KEYINT_MIN=FPS*2
 
 mkdir -p ${DST}
 
-ffmpeg -i ${SRC} -c:v libx264 -crf 23 -b:v 0 -pix_fmt yuv420p -g ${KEYINT_MIN} -keyint_min ${KEYINT_MIN} -sc_threshold 0 -c:a aac -b:a 128k -start_number 0 -hls_time 10 -hls_list_size 0 -async 1 -hls_segment_type ${SEGMENT_TYPE} -f hls ${DST}/${DST}.m3u8
+ffmpeg -i ${SRC} -c:v libx264 -crf 23 -b:v 0 -pix_fmt yuv420p -g ${KEYINT_MIN} -keyint_min ${KEYINT_MIN} -sc_threshold 0 -c:a aac -b:a 128k -start_number 0 -hls_time 10 -hls_list_size 0 -async 1 -hls_segment_type ${SEGMENT_TYPE} ${SUBTITLES_ARGS} -f hls ${OUTFILE}
 
 # Set the destination video's XMP tags in init.mp4 if the segment type is fragmented MP4 (fmp4)
 if [ ${SEGMENT_TYPE} = "fmp4" ]; then
