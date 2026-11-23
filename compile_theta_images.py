@@ -371,7 +371,9 @@ def argparse_time_offset_type(value):
     try:
       offset = float(m[1])
     except:
-      raise argparse.ArgumentTypeError("{}: invalid time offset".format(value))
+      raise argparse.ArgumentTypeError("{}: invalid time offset - should be "
+					"[+-]<float value><d|h|m|s>".
+					format(value))
 
     # Scale the offset value according to the time unit
     offset *= {"d": 86400,
@@ -380,6 +382,10 @@ def argparse_time_offset_type(value):
 		"s": 1}[m[2].lower()]
 
     return timedelta(seconds = offset)
+
+  raise argparse.ArgumentTypeError("{}: invalid time offset - should be "
+					"[+-]<float value><d|h|m|s>".
+					format(value))
 
 
 
@@ -586,7 +592,9 @@ def main():
 	  type = argparse_time_offset_type,
 	  help = "Time offset to apply to the images' timestamps, in case the "
 			"date / time wasn't set properly in the camera when "
-			"the images were captured. Default: no time offset"
+			"the images were captured. "
+			"Format: [+-]<float value><d|h|m|s>. "
+			"Default: no time offset"
 	)
 
     sp.add_argument(
