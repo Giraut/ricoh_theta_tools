@@ -429,7 +429,7 @@ def argparse_delogo_zone_type(value):
   if m is None:
     raise argparse.ArgumentTypeError("{}: invalid delogo zone".format(value))
 
-  return (int(m[3]), int(m[4]), int(m[1]), int(m[1]))
+  return (int(m[3]), int(m[4]), int(m[1]), int(m[2]))
 
 
 
