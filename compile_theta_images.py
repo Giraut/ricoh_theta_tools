@@ -14,6 +14,16 @@ ffmpeg_executable = "ffmpeg"
 exiftool_executable = "exiftool"
 mkvpropedit_executable = "mkvpropedit"
 
+# Some video players treat the end time of subtitle cues as exclusive (i.e. the
+# cues stop displaying AT their end times), other as inclusive (i.e. the
+# cues stop displaying AFTER their end times).
+# Since we generate back-to-back cues to display the timestamp as soft
+# subtitles, the end time of each cue and the start time of the next are
+# identical, and the latter players sometime display both cues when the video
+# frame change occurs exactly as the same time as the subtitle cue change.
+# To avoid this, de-sync the video and the subtitles by a few milliseconds
+subtitles_timestamps_offset = -0.005 #s
+
 # Default timelapse video encoding options
 default_timelapse_video_width = 4096 #px
 default_timelapse_video_height = 2048 #px
@@ -429,7 +439,7 @@ def argparse_delogo_zone_type(value):
   if m is None:
     raise argparse.ArgumentTypeError("{}: invalid delogo zone".format(value))
 
-  return (int(m[3]), int(m[4]), int(m[1]), int(m[2]))
+  return (int(m[3]), int(m[4]), int(m[1]), int(m[1]))
 
 
 
@@ -1628,7 +1638,8 @@ def main():
         if first_tstamp is not None:
 
           prev_subtitle_tstamp = subtitle_tstamp
-          subtitle_tstamp = tstamp - first_tstamp
+          subtitle_tstamp = max(0, tstamp - first_tstamp + \
+					subtitles_timestamps_offset)
 
           if subtitle != last_subtitle:
             subtitle_counter +=1
