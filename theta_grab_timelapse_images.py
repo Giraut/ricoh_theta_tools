@@ -31,7 +31,7 @@ except:
 ### Parameters
 take_photo_every = 15 #s
 check_camera_state_every = 300 #s
-run_camera_in_silent_powermode = False
+run_camera_in_silent_powermode = True
 turn_off_camera_when_battery_below = 20 #%
 reboot_camera_at_dusk_or_dawn_when_uptime_over = 14400 #s
 pov_correction_yaw = 0 #deg
@@ -599,19 +599,12 @@ def main():
 		format(take_photo_every))
         next_photo_tstamp = now - take_photo_every
 
-      # Is a photo scheduled?
-      if next_photo_tstamp != NEVER:
-
-        # If the next daytime / nighttime reconfiguration attempt is scheduled
-        # too close before a photo, postpone it so the photo takes precedence
-        # and happens exactly on time
-        if 0 <= next_photo_tstamp - next_day_night_setup_tstamp <= 2:
-          next_day_night_setup_tstamp += POSTPONED
-
-        # If the next state check is scheduled too close before a photo, cancel
-        # it so the photo takes precedence and happens exactly on time
-        if 0 <= next_photo_tstamp - next_state_check_tstamp <= 2:
-          next_state_check_tstamp += POSTPONED
+      # If a photo is scheduled to be taken in less than 2 seconds, postpone
+      # any scheduled daytime / nighttime reconfiguration attempt or state check
+      # so the photo takes precedence and happens exactly on time
+      if next_photo_tstamp - now < 2:
+        next_day_night_setup_tstamp += POSTPONED
+        next_state_check_tstamp += POSTPONED
 
       # Determine which event timeout is coming up next
       next_event_tstamp = min(next_basic_setup_tstamp,
