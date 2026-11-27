@@ -601,10 +601,9 @@ def main():
         next_photo_tstamp = now - take_photo_every
 
       # If a photo is scheduled to be taken in less than 2 seconds, postpone
-      # any scheduled daytime / nighttime reconfiguration attempt or state check
-      # so the photo takes precedence and happens exactly on time
+      # any scheduled state check so the photo takes precedence and happens
+      # exactly on time
       if next_photo_tstamp - now < 2:
-        next_day_night_setup_tstamp += POSTPONED
         next_state_check_tstamp += POSTPONED
 
       # Determine which event timeout is coming up next
