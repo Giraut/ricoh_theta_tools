@@ -40,6 +40,7 @@ pov_correction_roll = 0 #deg
 retries = 20
 wait_before_retry = 2 #s
 reconnect_tries = 5
+wait_camera_rebooted = 180 #s
 
 twilight_depression = Depression.NAUTICAL.value # sun ~12 deg below the horizon
 
@@ -624,7 +625,7 @@ def main():
 
         log(WARN, "Rebooting the camera")
         try:
-          rt.reboot()
+          rt.reboot(wait_rebooted = wait_camera_rebooted)
           next_reboot_tstamp = NEVER
           next_basic_setup_tstamp = now
 
